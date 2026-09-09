@@ -40,14 +40,33 @@ function firstReady<T>(obs: Observable<T>, ready: (v: T) => boolean, ms: number)
 
 function numTag(
   values: ReadonlyMap<string, ReadonlyMap<string, { value: string }>> | undefined,
-  tag: string,
+  ...tags: string[]
 ): number | undefined {
-  const perCurrency = values?.get(tag);
+  // Accept multiple candidate tag names (reqAccountUpdates tag names vary by
+  // account, e.g. cash is "CashBalance" rather than "TotalCashValue").
+  let perCurrency: ReadonlyMap<string, { value: string }> | undefined;
+  for (const tag of tags) {
+    perCurrency = values?.get(tag);
+    if (perCurrency) break;
+  }
   if (!perCurrency) return undefined;
-  // Prefer the account's base-currency summary; else take the first entry.
-  const entry = perCurrency.get("USD") ?? [...perCurrency.values()][0];
+  // Prefer the consolidated base-currency value ("BASE"), which sums all legs of
+  // a multi-currency account; else USD; else the first entry.
+  const entry =
+    perCurrency.get("BASE") ?? perCurrency.get("USD") ?? [...perCurrency.values()][0];
   const n = entry ? Number(entry.value) : NaN;
   return Number.isFinite(n) ? n : undefined;
+}
+
+/** Sum of absolute market values across non-zero position rows. */
+function sumAbsMarketValue(
+  portfolio: ReadonlyMap<string, ReadonlyArray<{ pos?: number; marketValue?: number }>> | undefined,
+): number {
+  if (!portfolio) return 0;
+  let sum = 0;
+  for (const list of portfolio.values())
+    for (const p of list) if (p.pos) sum += Math.abs(p.marketValue ?? 0);
+  return sum;
 }
 
 export async function getPortfolio(): Promise<PortfolioSnapshot> {
@@ -55,9 +74,25 @@ export async function getPortfolio(): Promise<PortfolioSnapshot> {
   const account = accounts[0] ?? null;
 
   // reqAccountUpdates: positions (with market value + PnL) AND balance values.
+  // Tags stream in incrementally (AccountCode first, NetLiquidation & co. later),
+  // so don't settle on the first emission — wait until a real balance tag has
+  // landed for the account, otherwise balances come back empty.
   const update = await firstReady(
     ib.api.getAccountUpdates(account ?? undefined),
-    (u) => Boolean(u.all?.value && u.all.value.size > 0),
+    (u) => {
+      const all = u.all?.value;
+      if (!all) return false;
+      const vals = account ? all.get(account) : [...all.values()][0];
+      // Balances aren't ready until NetLiquidation has streamed in.
+      if (!vals?.get("NetLiquidation")) return false;
+      // Positions also stream in one row at a time and lag the balance tags.
+      // GrossPositionValue is the account's total |market value| of holdings, so
+      // wait until the rows we've collected cover it (within a small tolerance
+      // for live price drift) — otherwise we'd return a partial position list.
+      const gross = numTag(vals, "GrossPositionValue") ?? 0;
+      if (gross <= 0) return true; // no holdings — nothing to wait for
+      return sumAbsMarketValue(u.all?.portfolio) >= gross * 0.98;
+    },
     10_000,
   );
 
@@ -87,7 +122,7 @@ export async function getPortfolio(): Promise<PortfolioSnapshot> {
   const values = account ? update.all?.value?.get(account) : undefined;
   const balances = {
     netLiquidation: numTag(values, "NetLiquidation"),
-    totalCashValue: numTag(values, "TotalCashValue"),
+    totalCashValue: numTag(values, "TotalCashValue", "CashBalance"),
     buyingPower: numTag(values, "BuyingPower"),
     grossPositionValue: numTag(values, "GrossPositionValue"),
     availableFunds: numTag(values, "AvailableFunds"),
