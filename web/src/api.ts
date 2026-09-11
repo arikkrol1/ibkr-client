@@ -71,6 +71,8 @@ export interface Portfolio {
 export interface PnlPoint {
   time: number;
   value: number;
+  /** Market value of the open position that day (signed; 0 when flat). */
+  mv: number;
 }
 
 export interface PnlSeries {
@@ -82,6 +84,7 @@ export interface PnlSeries {
   realized?: number;
   unrealized?: number;
   total: number;
+  costBasis?: number;
   points: PnlPoint[];
 }
 

@@ -8,6 +8,8 @@ export interface PnlPoint {
   time: number;
   /** Cumulative P&L (realized + unrealized) in the instrument's currency. */
   value: number;
+  /** Market value of the open position that day (signed; 0 when flat/unknown). */
+  mv: number;
 }
 
 export interface PnlSeries {
@@ -20,6 +22,8 @@ export interface PnlSeries {
   realized?: number;
   unrealized?: number;
   total: number;
+  /** Total cost deployed opening lots (fallback %-denominator). */
+  costBasis?: number;
   points: PnlPoint[];
 }
 
@@ -72,6 +76,8 @@ interface Lot {
 interface ReplayState {
   lots: Lot[];
   realized: number;
+  /** Cumulative |cost| of opened lots — the capital put at risk. */
+  deployed: number;
 }
 
 function applyTrade(state: ReplayState, t: FlexTrade): void {
@@ -82,6 +88,7 @@ function applyTrade(state: ReplayState, t: FlexTrade): void {
     if (!lot || Math.sign(lot.qty) === Math.sign(remaining)) {
       // Same direction (or flat) — opens a new lot.
       state.lots.push({ qty: remaining, cost: t.price });
+      state.deployed += Math.abs(remaining) * t.price * t.multiplier;
       return;
     }
     // Opposite direction — closes against the oldest lot (FIFO).
@@ -100,6 +107,12 @@ function unrealizedAt(state: ReplayState, close: number, multiplier: number): nu
   return sum;
 }
 
+function marketValueAt(state: ReplayState, close: number, multiplier: number): number {
+  let sum = 0;
+  for (const lot of state.lots) sum += lot.qty * close * multiplier;
+  return sum;
+}
+
 /**
  * Replay a symbol's trades against its daily closes, producing the cumulative
  * (realized + unrealized) P&L at the end of each day.
@@ -108,8 +121,9 @@ function replaySeries(trades: FlexTrade[], bars: HistoryBar[]): {
   points: PnlPoint[];
   realized: number;
   unrealized: number;
+  deployed: number;
 } {
-  const state: ReplayState = { lots: [], realized: 0 };
+  const state: ReplayState = { lots: [], realized: 0, deployed: 0 };
   const multiplier = trades[0]?.multiplier ?? 1;
   const points: PnlPoint[] = [];
   let ti = 0;
@@ -125,6 +139,7 @@ function replaySeries(trades: FlexTrade[], bars: HistoryBar[]): {
     points.push({
       time: bar.time,
       value: state.realized + unrealizedAt(state, bar.close, multiplier),
+      mv: marketValueAt(state, bar.close, multiplier),
     });
   }
   // Trades newer than the last bar (e.g. today's fills before the daily bar exists).
@@ -133,8 +148,12 @@ function replaySeries(trades: FlexTrade[], bars: HistoryBar[]): {
     ti++;
   }
   const unrealized = unrealizedAt(state, lastClose, multiplier);
-  if (points.length > 0) points[points.length - 1].value = state.realized + unrealized;
-  return { points, realized: state.realized, unrealized };
+  if (points.length > 0) {
+    const last = points[points.length - 1];
+    last.value = state.realized + unrealized;
+    last.mv = marketValueAt(state, lastClose, multiplier);
+  }
+  return { points, realized: state.realized, unrealized, deployed: state.deployed };
 }
 
 /** Flat fallback when price history is unavailable (e.g. delisted symbols). */
@@ -142,19 +161,20 @@ function flatSeries(trades: FlexTrade[], startTime: number, endTime: number): {
   points: PnlPoint[];
   realized: number;
   unrealized: number;
+  deployed: number;
 } {
-  const state: ReplayState = { lots: [], realized: 0 };
+  const state: ReplayState = { lots: [], realized: 0, deployed: 0 };
   for (const t of trades) applyTrade(state, t);
   // Without prices, unrealized on any still-open lots is unknowable — realized only.
   const start = Math.max(startTime, trades[0]?.time ?? startTime);
   const points: PnlPoint[] =
     start < endTime
       ? [
-          { time: start, value: state.realized },
-          { time: endTime, value: state.realized },
+          { time: start, value: state.realized, mv: 0 },
+          { time: endTime, value: state.realized, mv: 0 },
         ]
-      : [{ time: endTime, value: state.realized }];
-  return { points, realized: state.realized, unrealized: 0 };
+      : [{ time: endTime, value: state.realized, mv: 0 }];
+  return { points, realized: state.realized, unrealized: 0, deployed: state.deployed };
 }
 
 async function flexHistory(days: number): Promise<PnlHistory> {
@@ -235,6 +255,7 @@ async function flexHistory(days: number): Promise<PnlHistory> {
       realized: replay.realized,
       unrealized: replay.unrealized,
       total: replay.realized + replay.unrealized,
+      costBasis: replay.deployed,
       points: replay.points,
     } satisfies PnlSeries;
   });
@@ -270,11 +291,14 @@ async function approxHistory(days: number): Promise<PnlHistory> {
         points = bars.map((b) => ({
           time: b.time,
           value: p.position * (b.close * multiplier - (p.avgCost ?? 0)),
+          mv: p.position * b.close * multiplier,
         }));
-        // Anchor the newest point to IBKR's own live number so the chart's right
-        // edge matches the Dashboard exactly.
-        if (points.length > 0 && p.unrealizedPnL != null) {
-          points[points.length - 1].value = p.unrealizedPnL;
+        // Anchor the newest point to IBKR's own live numbers so the chart's
+        // right edge matches the Dashboard exactly.
+        if (points.length > 0) {
+          const last = points[points.length - 1];
+          if (p.unrealizedPnL != null) last.value = p.unrealizedPnL;
+          if (p.marketValue != null) last.mv = p.marketValue;
         }
       } catch (err) {
         errors.push({ symbol, message: err instanceof Error ? err.message : String(err) });
@@ -286,6 +310,7 @@ async function approxHistory(days: number): Promise<PnlHistory> {
         currency: p.currency,
         unrealized: p.unrealizedPnL,
         total: p.unrealizedPnL ?? points[points.length - 1]?.value ?? 0,
+        costBasis: Math.abs(p.position * (p.avgCost ?? 0)),
         points,
       } satisfies PnlSeries;
     },

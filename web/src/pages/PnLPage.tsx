@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type PnlSeries } from "../api";
 import { PnlChart } from "../components/PnlChart";
+import { PnlPctChart } from "../components/PnlPctChart";
 import { fmtMoney, pnlColor } from "../utils/format";
 
 const RANGES = [
@@ -35,9 +36,13 @@ export function PnLPage() {
   const [days, setDays] = useState<number>(90);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
+  // Always fetch ≥370 days so the %-by-timeframe panel (trailing year / YTD)
+  // has data regardless of the line chart's selected range; the line chart
+  // slices client-side, which also makes range switching instant.
+  const fetchDays = Math.max(days, 370);
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["pnl", days],
-    queryFn: () => api.pnl(days),
+    queryKey: ["pnl", fetchDays],
+    queryFn: () => api.pnl(fetchDays),
     refetchInterval: 60_000,
   });
 
@@ -48,6 +53,16 @@ export function PnLPage() {
     return map;
   }, [data]);
   const colorFor = (key: string) => colorMap.get(key) ?? OVERFLOW_COLOR;
+
+  // Line-chart view of the selected range.
+  const chartSeries = useMemo(() => {
+    if (!data) return [];
+    const cutoff = Date.now() / 1000 - days * 86_400;
+    return data.series.map((s) => ({
+      ...s,
+      points: s.points.filter((p) => p.time >= cutoff),
+    }));
+  }, [data, days]);
 
   const toggle = (key: string) =>
     setHidden((prev) => {
@@ -146,10 +161,12 @@ export function PnLPage() {
                 );
               })}
             </div>
-            <PnlChart series={data.series} hidden={hidden} colorFor={colorFor} />
+            <PnlChart series={chartSeries} hidden={hidden} colorFor={colorFor} />
           </>
         )}
       </div>
+
+      {data.series.length > 0 && <PnlPctChart series={data.series} colorFor={colorFor} />}
 
       {data.series.length > 0 && <BreakdownTable series={data.series} colorFor={colorFor} />}
 
