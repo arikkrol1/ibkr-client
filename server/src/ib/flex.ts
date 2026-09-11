@@ -39,9 +39,13 @@ export function flexConfigured(): boolean {
 }
 
 // Flex statement generation is slow and IBKR throttles requests, so cache the
-// parsed trades for a while.
+// parsed trades for a while. After a failure, back off before retrying — the
+// UI polls every minute, and hammering a throttled service escalates IBKR's
+// throttle into a temporary "too many failed attempts" lockout.
 const FLEX_TTL_MS = 15 * 60_000;
+const FAILURE_COOLDOWN_MS = 10 * 60_000;
 let cache: { trades: FlexTrade[]; fetchedAt: number } | null = null;
+let lastFailure: { error: Error; at: number } | null = null;
 let inFlight: Promise<FlexTrade[]> | null = null;
 
 const parser = new XMLParser({
@@ -181,11 +185,19 @@ async function fetchTrades(): Promise<FlexTrade[]> {
 export async function getFlexTrades(): Promise<FlexTrade[]> {
   if (!flexConfigured()) throw new Error("Flex Query not configured");
   if (cache && performance.now() - cache.fetchedAt < FLEX_TTL_MS) return cache.trades;
+  if (lastFailure && performance.now() - lastFailure.at < FAILURE_COOLDOWN_MS) {
+    throw new Error(`${lastFailure.error.message} (retrying in a few minutes)`);
+  }
   if (inFlight) return inFlight;
   inFlight = fetchTrades()
     .then((trades) => {
       cache = { trades, fetchedAt: performance.now() };
+      lastFailure = null;
       return trades;
+    })
+    .catch((err) => {
+      lastFailure = { error: err instanceof Error ? err : new Error(String(err)), at: performance.now() };
+      throw err;
     })
     .finally(() => {
       inFlight = null;

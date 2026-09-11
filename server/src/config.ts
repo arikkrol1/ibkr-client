@@ -2,10 +2,10 @@ import { config as loadEnv } from "dotenv";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-// Load the project-root .env (two levels up from server/src or server/dist).
-// The server runs with cwd=server/, so dotenv's default lookup would miss it.
+// Load server/.env (one level up from server/src or server/dist), resolved
+// relative to this module so it works regardless of the process cwd.
 loadEnv({
-  path: join(dirname(fileURLToPath(import.meta.url)), "../../.env"),
+  path: join(dirname(fileURLToPath(import.meta.url)), "../.env"),
   quiet: true,
 });
 
