@@ -26,9 +26,16 @@ export const config = {
    * Reports → Flex Queries). When set, the P&L tab uses the account's full
    * trade history — including closed positions. When empty, the server falls
    * back to approximating P&L from current positions only.
+   *
+   * IBKR caps each Flex query at a 365-day window, so IB_FLEX_QUERY_ID takes a
+   * comma-separated list of query ids (one per custom year range); their trades
+   * are merged and de-duplicated.
    */
   flex: {
     token: process.env.IB_FLEX_TOKEN ?? "",
-    queryId: process.env.IB_FLEX_QUERY_ID ?? "",
+    queryIds: (process.env.IB_FLEX_QUERY_ID ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 } as const;

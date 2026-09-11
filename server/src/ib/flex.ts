@@ -16,6 +16,8 @@ const SEND_REQUEST_URL =
   "https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.SendRequest";
 
 export interface FlexTrade {
+  /** IBKR execution/trade id when the query includes it — used for de-dup. */
+  tradeId?: string;
   symbol: string;
   conId?: number;
   secType?: string;
@@ -33,7 +35,7 @@ export interface FlexTrade {
 }
 
 export function flexConfigured(): boolean {
-  return Boolean(config.flex.token && config.flex.queryId);
+  return Boolean(config.flex.token && config.flex.queryIds.length > 0);
 }
 
 // Flex statement generation is slow and IBKR throttles requests, so cache the
@@ -109,6 +111,7 @@ function toTrade(a: Record<string, string>): (FlexTrade & { detail?: string }) |
   const conId = Number(a.conid);
   return {
     detail: a.levelOfDetail,
+    tradeId: a.tradeID || a.transactionID || undefined,
     symbol,
     conId: Number.isFinite(conId) && conId > 0 ? conId : undefined,
     secType: a.assetCategory,
@@ -121,8 +124,8 @@ function toTrade(a: Record<string, string>): (FlexTrade & { detail?: string }) |
   };
 }
 
-async function fetchTrades(): Promise<FlexTrade[]> {
-  const { token, queryId } = config.flex;
+async function fetchQueryTrades(queryId: string): Promise<FlexTrade[]> {
+  const { token } = config.flex;
 
   const send = await fetchXml(`${SEND_REQUEST_URL}?t=${token}&q=${queryId}&v=3`);
   const sendResp = (send.FlexStatementResponse ?? {}) as Record<string, unknown>;
@@ -152,11 +155,26 @@ async function fetchTrades(): Promise<FlexTrade[]> {
     // keep one level only (prefer executions) to avoid double counting.
     const executions = all.filter((t) => t.detail === "EXECUTION");
     const chosen = executions.length > 0 ? executions : all;
-    return chosen
-      .map(({ detail: _detail, ...t }) => t)
-      .sort((a, b) => a.time - b.time);
+    return chosen.map(({ detail: _detail, ...t }) => t);
   }
   throw new Error("Flex statement generation timed out");
+}
+
+/**
+ * Fetch every configured query (typically one per 365-day window — the IBKR
+ * cap) and merge, de-duplicating fills that appear in overlapping ranges.
+ */
+async function fetchTrades(): Promise<FlexTrade[]> {
+  const merged = new Map<string, FlexTrade>();
+  // Sequential on purpose: IBKR throttles concurrent Flex requests.
+  for (const queryId of config.flex.queryIds) {
+    for (const t of await fetchQueryTrades(queryId)) {
+      const key =
+        t.tradeId ?? `${t.conId ?? t.symbol}|${t.time}|${t.quantity}|${t.price}`;
+      merged.set(key, t);
+    }
+  }
+  return [...merged.values()].sort((a, b) => a.time - b.time);
 }
 
 /** Full trade history from the configured Flex Query (cached ~15 min). */
