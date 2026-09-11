@@ -70,6 +70,18 @@ function now(): number {
   return performance.now();
 }
 
+/**
+ * IB ignores formatDate=2 for daily-and-larger bars and returns "yyyymmdd"
+ * strings; intraday bars come back as epoch seconds. Normalize to epoch.
+ */
+function barTime(raw: string | number): number {
+  const s = String(raw).trim();
+  if (/^\d{8}$/.test(s)) {
+    return Date.UTC(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8))) / 1000;
+  }
+  return Number(raw);
+}
+
 export async function getHistory(p: HistoryParams): Promise<HistoryBar[]> {
   const key = cacheKey(p);
 
@@ -94,7 +106,7 @@ export async function getHistory(p: HistoryParams): Promise<HistoryBar[]> {
     const bars = raw
       .filter((b) => b.time != null && b.close != null)
       .map<HistoryBar>((b) => ({
-        time: Number(b.time),
+        time: barTime(b.time as string | number),
         open: b.open ?? b.close ?? 0,
         high: b.high ?? b.close ?? 0,
         low: b.low ?? b.close ?? 0,

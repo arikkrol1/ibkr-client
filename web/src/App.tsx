@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ChartPage } from "./pages/ChartPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { PnLPage } from "./pages/PnLPage";
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         </span>
         <nav className="flex gap-1">
           <Tab to="/">Dashboard</Tab>
+          <Tab to="/pnl">P&L</Tab>
           <Tab to="/chart">Charts</Tab>
         </nav>
       </header>
@@ -19,6 +21,7 @@ export default function App() {
       <main className="flex-1 p-4">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/pnl" element={<PnLPage />} />
           <Route path="/chart" element={<ChartPage />} />
         </Routes>
       </main>

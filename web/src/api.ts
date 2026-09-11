@@ -68,6 +68,30 @@ export interface Portfolio {
   positions: PortfolioPosition[];
 }
 
+export interface PnlPoint {
+  time: number;
+  value: number;
+}
+
+export interface PnlSeries {
+  key: string;
+  symbol: string;
+  secType?: string;
+  currency?: string;
+  closed?: boolean;
+  realized?: number;
+  unrealized?: number;
+  total: number;
+  points: PnlPoint[];
+}
+
+export interface PnlHistory {
+  source: "flex" | "approx";
+  flexConfigured: boolean;
+  series: PnlSeries[];
+  errors: { symbol: string; message: string }[];
+}
+
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
@@ -90,4 +114,5 @@ export const api = {
     return getJSON<HistoryResponse>(`/api/history?${qs.toString()}`);
   },
   portfolio: () => getJSON<Portfolio>("/api/portfolio"),
+  pnl: (days: number) => getJSON<PnlHistory>(`/api/pnl?days=${days}`),
 };

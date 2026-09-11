@@ -20,4 +20,15 @@ export const config = {
      */
     marketDataType: Number(process.env.IB_MARKET_DATA_TYPE ?? 1),
   },
+
+  /**
+   * IBKR Flex Web Service credentials (Account Management → Performance &
+   * Reports → Flex Queries). When set, the P&L tab uses the account's full
+   * trade history — including closed positions. When empty, the server falls
+   * back to approximating P&L from current positions only.
+   */
+  flex: {
+    token: process.env.IB_FLEX_TOKEN ?? "",
+    queryId: process.env.IB_FLEX_QUERY_ID ?? "",
+  },
 } as const;
