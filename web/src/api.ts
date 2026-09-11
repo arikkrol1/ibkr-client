@@ -88,6 +88,7 @@ export interface PnlSeries {
 export interface PnlHistory {
   source: "flex" | "approx";
   flexConfigured: boolean;
+  flexError?: string;
   series: PnlSeries[];
   errors: { symbol: string; message: string }[];
 }

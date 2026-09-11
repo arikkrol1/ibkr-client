@@ -27,6 +27,8 @@ export interface PnlHistory {
   /** "flex" = true trade history; "approx" = current positions × price history. */
   source: "flex" | "approx";
   flexConfigured: boolean;
+  /** Set when flex is configured but fetching failed (source fell back to approx). */
+  flexError?: string;
   series: PnlSeries[];
   errors: { symbol: string; message: string }[];
 }
@@ -156,7 +158,8 @@ function flatSeries(trades: FlexTrade[], startTime: number, endTime: number): {
 }
 
 async function flexHistory(days: number): Promise<PnlHistory> {
-  const trades = await getFlexTrades();
+  // Forex conversions (assetCategory CASH) are funding, not investments.
+  const trades = (await getFlexTrades()).filter((t) => t.secType !== "CASH");
   const nowSec = Math.floor(Date.now() / 1000);
   const startTime = nowSec - days * DAY;
 
@@ -166,6 +169,41 @@ async function flexHistory(days: number): Promise<PnlHistory> {
     const list = groups.get(key);
     if (list) list.push(t);
     else groups.set(key, [t]);
+  }
+
+  // Flex queries only cover their configured windows, so positions opened
+  // before the earliest window are missing (or under-counted) in the replay.
+  // Seed each current position whose quantity isn't explained by flex trades
+  // with a synthetic opening lot at IB's blended avg cost.
+  try {
+    const { positions } = await getPortfolio();
+    for (const p of positions) {
+      if (!p.symbol) continue;
+      const key = p.conId != null ? `c${p.conId}` : `s${p.symbol}`;
+      const group = groups.get(key) ?? [];
+      const replayedQty = group.reduce((q, t) => q + t.quantity, 0);
+      const missing = p.position - replayedQty;
+      if (Math.abs(missing) < EPS) continue;
+      const multiplier =
+        p.marketPrice && p.marketValue && p.position
+          ? Math.round((p.marketValue / (p.marketPrice * p.position)) * 100) / 100 || 1
+          : 1;
+      const earliest = group[0]?.time ?? nowSec;
+      group.unshift({
+        symbol: p.symbol,
+        conId: p.conId,
+        secType: p.secType,
+        currency: p.currency,
+        multiplier,
+        time: Math.min(startTime, earliest) - DAY,
+        quantity: missing,
+        price: (p.avgCost ?? 0) / multiplier,
+        commission: 0,
+      });
+      groups.set(key, group);
+    }
+  } catch {
+    // Portfolio unavailable — chart still covers flex-known symbols.
   }
 
   const errors: { symbol: string; message: string }[] = [];
@@ -273,7 +311,22 @@ const responseCache = new Map<number, { data: PnlHistory; fetchedAt: number }>()
 export async function getPnlHistory(days: number): Promise<PnlHistory> {
   const cached = responseCache.get(days);
   if (cached && performance.now() - cached.fetchedAt < PNL_TTL_MS) return cached.data;
-  const data = flexConfigured() ? await flexHistory(days) : await approxHistory(days);
+  let data: PnlHistory;
+  if (flexConfigured()) {
+    try {
+      data = await flexHistory(days);
+    } catch (err) {
+      // Flex is flaky (statement generation throttles) — degrade to the
+      // approximation rather than failing the whole tab.
+      data = {
+        ...(await approxHistory(days)),
+        flexConfigured: true,
+        flexError: err instanceof Error ? err.message : String(err),
+      };
+    }
+  } else {
+    data = await approxHistory(days);
+  }
   responseCache.set(days, { data, fetchedAt: performance.now() });
   return data;
 }

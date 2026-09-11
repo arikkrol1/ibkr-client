@@ -93,12 +93,21 @@ export function PnLPage() {
 
       {data.source === "approx" && (
         <div className="rounded-xl border border-amber-900/60 bg-amber-950/30 px-4 py-2.5 text-sm text-amber-200/90">
-          Approximated from current positions × historical prices — closed (past)
-          positions aren't included, and position-size changes within the range are
-          ignored. For exact history including past symbols, set{" "}
-          <code className="rounded bg-black/30 px-1">IB_FLEX_TOKEN</code> and{" "}
-          <code className="rounded bg-black/30 px-1">IB_FLEX_QUERY_ID</code> on the
-          server (IBKR Account Management → Reports → Flex Queries).
+          {data.flexError ? (
+            <>
+              Trade history temporarily unavailable ({data.flexError}) — showing the
+              current-positions approximation instead. Retries automatically.
+            </>
+          ) : (
+            <>
+              Approximated from current positions × historical prices — closed (past)
+              positions aren't included, and position-size changes within the range are
+              ignored. For exact history including past symbols, set{" "}
+              <code className="rounded bg-black/30 px-1">IB_FLEX_TOKEN</code> and{" "}
+              <code className="rounded bg-black/30 px-1">IB_FLEX_QUERY_ID</code> on the
+              server (IBKR Account Management → Reports → Flex Queries).
+            </>
+          )}
         </div>
       )}
 

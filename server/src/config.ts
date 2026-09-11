@@ -1,3 +1,14 @@
+import { config as loadEnv } from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+// Load the project-root .env (two levels up from server/src or server/dist).
+// The server runs with cwd=server/, so dotenv's default lookup would miss it.
+loadEnv({
+  path: join(dirname(fileURLToPath(import.meta.url)), "../../.env"),
+  quiet: true,
+});
+
 /**
  * Runtime configuration. All values can be overridden with env vars so the same
  * build can point at IB Gateway (live 4001 / paper 4002) or TWS (7496 / 7497).
