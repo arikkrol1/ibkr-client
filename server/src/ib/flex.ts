@@ -1,3 +1,6 @@
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { config } from "../config.js";
 
@@ -44,8 +47,36 @@ export function flexConfigured(): boolean {
 // throttle into a temporary "too many failed attempts" lockout.
 const FLEX_TTL_MS = 15 * 60_000;
 const FAILURE_COOLDOWN_MS = 10 * 60_000;
+/**
+ * IBKR's error-1025 lockout is account-scoped (a new token doesn't clear it)
+ * and appears to renew on every further attempt — go quiet for hours.
+ */
+const LOCKOUT_COOLDOWN_MS = 3 * 3600_000;
+
+/**
+ * The cooldown must survive process restarts: tsx watch restarts the server on
+ * every code save, and an in-memory cooldown would fire a fresh (lockout-
+ * renewing) attempt each time. Persisted beside server/ (gitignored).
+ */
+const COOLDOWN_FILE = join(dirname(fileURLToPath(import.meta.url)), "../../.flex-cooldown.json");
+
+interface Cooldown {
+  message: string;
+  /** Epoch ms after which a retry is allowed. */
+  until: number;
+}
+
+function loadCooldown(): Cooldown | null {
+  try {
+    const c = JSON.parse(readFileSync(COOLDOWN_FILE, "utf8")) as Cooldown;
+    return typeof c.until === "number" && c.until > Date.now() ? c : null;
+  } catch {
+    return null;
+  }
+}
+
 let cache: { trades: FlexTrade[]; fetchedAt: number } | null = null;
-let lastFailure: { error: Error; at: number } | null = null;
+let cooldown: Cooldown | null = loadCooldown();
 let inFlight: Promise<FlexTrade[]> | null = null;
 
 const parser = new XMLParser({
@@ -185,18 +216,33 @@ async function fetchTrades(): Promise<FlexTrade[]> {
 export async function getFlexTrades(): Promise<FlexTrade[]> {
   if (!flexConfigured()) throw new Error("Flex Query not configured");
   if (cache && performance.now() - cache.fetchedAt < FLEX_TTL_MS) return cache.trades;
-  if (lastFailure && performance.now() - lastFailure.at < FAILURE_COOLDOWN_MS) {
-    throw new Error(`${lastFailure.error.message} (retrying in a few minutes)`);
+  if (cooldown && Date.now() < cooldown.until) {
+    const at = new Date(cooldown.until).toLocaleTimeString();
+    throw new Error(`${cooldown.message} (next retry after ${at})`);
   }
   if (inFlight) return inFlight;
   inFlight = fetchTrades()
     .then((trades) => {
       cache = { trades, fetchedAt: performance.now() };
-      lastFailure = null;
+      cooldown = null;
+      try {
+        unlinkSync(COOLDOWN_FILE);
+      } catch {
+        // never existed — fine
+      }
       return trades;
     })
     .catch((err) => {
-      lastFailure = { error: err instanceof Error ? err : new Error(String(err)), at: performance.now() };
+      const message = err instanceof Error ? err.message : String(err);
+      const ms = /too many failed attempts/i.test(message)
+        ? LOCKOUT_COOLDOWN_MS
+        : FAILURE_COOLDOWN_MS;
+      cooldown = { message, until: Date.now() + ms };
+      try {
+        writeFileSync(COOLDOWN_FILE, JSON.stringify(cooldown));
+      } catch {
+        // in-memory cooldown still applies
+      }
       throw err;
     })
     .finally(() => {

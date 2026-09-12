@@ -28,11 +28,6 @@ export interface PnlSeries {
 }
 
 export interface PnlHistory {
-  /** "flex" = true trade history; "approx" = current positions × price history. */
-  source: "flex" | "approx";
-  flexConfigured: boolean;
-  /** Set when flex is configured but fetching failed (source fell back to approx). */
-  flexError?: string;
   series: PnlSeries[];
   errors: { symbol: string; message: string }[];
 }
@@ -260,68 +255,7 @@ async function flexHistory(days: number): Promise<PnlHistory> {
     } satisfies PnlSeries;
   });
 
-  return { source: "flex", flexConfigured: true, series: sortSeries(series), errors };
-}
-
-// --- approximation mode (no flex configured) ---
-
-async function approxHistory(days: number): Promise<PnlHistory> {
-  const snapshot = await getPortfolio();
-  const errors: { symbol: string; message: string }[] = [];
-
-  const series = await mapLimit(
-    snapshot.positions.filter((p) => p.symbol),
-    3,
-    async (p) => {
-      const symbol = p.symbol as string;
-      // avgCost includes the contract multiplier; derive it from the snapshot so
-      // derivatives (options/futures) scale correctly. Stocks → 1.
-      const multiplier =
-        p.marketPrice && p.marketValue && p.position
-          ? Math.round((p.marketValue / (p.marketPrice * p.position)) * 100) / 100 || 1
-          : 1;
-      let points: PnlPoint[] = [];
-      try {
-        const bars = await getHistory({
-          contract: resolveContract({ conId: p.conId, symbol, currency: p.currency }),
-          barSize: "1 day",
-          duration: toDuration(days),
-          useRTH: true,
-        });
-        points = bars.map((b) => ({
-          time: b.time,
-          value: p.position * (b.close * multiplier - (p.avgCost ?? 0)),
-          mv: p.position * b.close * multiplier,
-        }));
-        // Anchor the newest point to IBKR's own live numbers so the chart's
-        // right edge matches the Dashboard exactly.
-        if (points.length > 0) {
-          const last = points[points.length - 1];
-          if (p.unrealizedPnL != null) last.value = p.unrealizedPnL;
-          if (p.marketValue != null) last.mv = p.marketValue;
-        }
-      } catch (err) {
-        errors.push({ symbol, message: err instanceof Error ? err.message : String(err) });
-      }
-      return {
-        key: p.conId != null ? `c${p.conId}` : `s${symbol}`,
-        symbol,
-        secType: p.secType,
-        currency: p.currency,
-        unrealized: p.unrealizedPnL,
-        total: p.unrealizedPnL ?? points[points.length - 1]?.value ?? 0,
-        costBasis: Math.abs(p.position * (p.avgCost ?? 0)),
-        points,
-      } satisfies PnlSeries;
-    },
-  );
-
-  return {
-    source: "approx",
-    flexConfigured: false,
-    series: sortSeries(series.filter((s) => s.points.length > 0)),
-    errors,
-  };
+  return { series: sortSeries(series), errors };
 }
 
 function sortSeries(series: PnlSeries[]): PnlSeries[] {
@@ -333,25 +267,21 @@ function sortSeries(series: PnlSeries[]): PnlSeries[] {
 const PNL_TTL_MS = 60_000;
 const responseCache = new Map<number, { data: PnlHistory; fetchedAt: number }>();
 
+/**
+ * Per-symbol P&L history from real trade data only. Throws when the Flex
+ * Query isn't configured or its fetch fails — no synthetic fallback.
+ */
 export async function getPnlHistory(days: number): Promise<PnlHistory> {
+  if (!flexConfigured()) {
+    const err = new Error(
+      "Trade history requires an IBKR Flex Query — set IB_FLEX_TOKEN and IB_FLEX_QUERY_ID on the server",
+    );
+    (err as Error & { statusCode?: number }).statusCode = 503;
+    throw err;
+  }
   const cached = responseCache.get(days);
   if (cached && performance.now() - cached.fetchedAt < PNL_TTL_MS) return cached.data;
-  let data: PnlHistory;
-  if (flexConfigured()) {
-    try {
-      data = await flexHistory(days);
-    } catch (err) {
-      // Flex is flaky (statement generation throttles) — degrade to the
-      // approximation rather than failing the whole tab.
-      data = {
-        ...(await approxHistory(days)),
-        flexConfigured: true,
-        flexError: err instanceof Error ? err.message : String(err),
-      };
-    }
-  } else {
-    data = await approxHistory(days);
-  }
+  const data = await flexHistory(days);
   responseCache.set(days, { data, fetchedAt: performance.now() });
   return data;
 }
