@@ -48,5 +48,19 @@ export const config = {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    /** Hours stored trades stay fresh before the next Flex fetch is attempted. */
+    refreshHours: Number(process.env.IB_FLEX_REFRESH_HOURS ?? 12),
+  },
+
+  /**
+   * Persistence for immutable historical data (trades, daily bars). "sqlite"
+   * is the only driver today; the storage interface in src/storage/storage.ts
+   * is the seam for adding others.
+   */
+  db: {
+    driver: process.env.DB_DRIVER ?? "sqlite",
+    sqlitePath:
+      process.env.DB_SQLITE_PATH ??
+      join(dirname(fileURLToPath(import.meta.url)), "../.data/ibkr.sqlite"),
   },
 } as const;

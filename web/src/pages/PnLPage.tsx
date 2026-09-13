@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type PnlSeries } from "../api";
 import { PnlChart } from "../components/PnlChart";
 import { PnlPctChart } from "../components/PnlPctChart";
@@ -35,6 +35,22 @@ const OVERFLOW_COLOR = "#64748b";
 export function PnLPage() {
   const [days, setDays] = useState<number>(90);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const refreshTrades = async () => {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      await api.pnlRefresh();
+      await queryClient.invalidateQueries({ queryKey: ["pnl"] });
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Always fetch ≥370 days so the %-by-timeframe panel (trailing year / YTD)
   // has data regardless of the line chart's selected range; the line chart
@@ -89,22 +105,45 @@ export function PnLPage() {
             {fmtMoney(visibleTotal)}
           </span>
         </div>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.label}
-              onClick={() => setDays(r.days)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                days === r.days
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:bg-gray-900 hover:text-gray-200"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-gray-500">
+            {data.tradesAsOf
+              ? `Trades as of ${new Date(data.tradesAsOf).toLocaleString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}`
+              : "No trade data yet"}
+          </span>
+          <button
+            onClick={refreshTrades}
+            disabled={refreshing}
+            className="rounded-md border border-gray-700 px-2.5 py-1 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:text-white disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+          <div className="flex gap-1">
+            {RANGES.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => setDays(r.days)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  days === r.days
+                    ? "bg-gray-800 text-white"
+                    : "text-gray-400 hover:bg-gray-900 hover:text-gray-200"
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {refreshError && (
+        <p className="text-xs text-red-400">Refresh failed: {refreshError}</p>
+      )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
         {data.series.length === 0 ? (

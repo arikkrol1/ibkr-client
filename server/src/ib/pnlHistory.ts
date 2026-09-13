@@ -1,7 +1,7 @@
 import { resolveContract } from "./contracts.js";
 import { getHistory, type HistoryBar } from "./marketData.js";
 import { getPortfolio } from "./portfolio.js";
-import { getFlexTrades, flexConfigured, type FlexTrade } from "./flex.js";
+import { getFlexTrades, flexConfigured, tradesAsOf, type FlexTrade } from "./flex.js";
 
 export interface PnlPoint {
   /** UNIX seconds (UTC), daily resolution. */
@@ -30,6 +30,8 @@ export interface PnlSeries {
 export interface PnlHistory {
   series: PnlSeries[];
   errors: { symbol: string; message: string }[];
+  /** Epoch ms of the last successful Flex fetch backing this data. */
+  tradesAsOf?: number;
 }
 
 const DAY = 86_400;
@@ -255,7 +257,7 @@ async function flexHistory(days: number): Promise<PnlHistory> {
     } satisfies PnlSeries;
   });
 
-  return { series: sortSeries(series), errors };
+  return { series: sortSeries(series), errors, tradesAsOf: await tradesAsOf() };
 }
 
 function sortSeries(series: PnlSeries[]): PnlSeries[] {
@@ -266,6 +268,11 @@ function sortSeries(series: PnlSeries[]): PnlSeries[] {
 
 const PNL_TTL_MS = 60_000;
 const responseCache = new Map<number, { data: PnlHistory; fetchedAt: number }>();
+
+/** Drop cached responses (after a forced trade refresh). */
+export function invalidatePnlCache(): void {
+  responseCache.clear();
+}
 
 /**
  * Per-symbol P&L history from real trade data only. Throws when the Flex

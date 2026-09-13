@@ -7,6 +7,7 @@ import {
 } from "@stoqey/ib";
 import { Observable } from "rxjs";
 import { ib } from "./connection.js";
+import { getStorage } from "../storage/storage.js";
 
 /**
  * Stable IBKR tick-type protocol constants. The package's `TickType` is only a
@@ -82,6 +83,91 @@ function barTime(raw: string | number): number {
   return Number(raw);
 }
 
+async function fetchFromIb(p: HistoryParams): Promise<HistoryBar[]> {
+  const raw: Bar[] = await ib.api.getHistoricalData(
+    p.contract,
+    "", // endDateTime "" = now
+    p.duration,
+    p.barSize as BarSizeSetting,
+    WhatToShow.TRADES,
+    p.useRTH ? 1 : 0,
+    2, // formatDate=2 → epoch seconds
+  );
+  return raw
+    .filter((b) => b.time != null && b.close != null)
+    .map<HistoryBar>((b) => ({
+      time: barTime(b.time as string | number),
+      open: b.open ?? b.close ?? 0,
+      high: b.high ?? b.close ?? 0,
+      low: b.low ?? b.close ?? 0,
+      close: b.close ?? 0,
+      volume: b.volume ?? 0,
+    }))
+    .sort((a, b) => a.time - b.time);
+}
+
+// --- daily-bar persistence: past prices are immutable, so store them and ---
+// --- refetch from IB at most every few hours per contract               ---
+
+const BARS_REFETCH_MS = 6 * 3600_000;
+
+function contractKeyOf(c: Contract): string {
+  return c.conId != null ? String(c.conId) : `${c.symbol}:${c.currency}:${c.exchange}`;
+}
+
+/** Approximate seconds covered by an IBKR duration string ("90 D", "2 Y", …). */
+function durationSeconds(duration: string): number {
+  const m = /^(\d+)\s*([SDWMY])/i.exec(duration.trim());
+  if (!m) return 0;
+  const mult: Record<string, number> = {
+    S: 1,
+    D: 86_400,
+    W: 7 * 86_400,
+    M: 31 * 86_400,
+    Y: 366 * 86_400,
+  };
+  return Number(m[1]) * (mult[m[2].toUpperCase()] ?? 86_400);
+}
+
+async function getDailyHistory(p: HistoryParams): Promise<HistoryBar[]> {
+  const store = getStorage();
+  const key = contractKeyOf(p.contract);
+  const fromTime = Math.floor(Date.now() / 1000) - durationSeconds(p.duration);
+
+  // Serve from storage when we've already fetched at least this span recently.
+  const coveredFrom = Number(
+    (await store.getMeta(`bars_span:${key}`)) ?? Number.POSITIVE_INFINITY,
+  );
+  const fetchedAt = Number((await store.getMeta(`bars_fetched_at:${key}`)) ?? 0);
+  if (coveredFrom <= fromTime && Date.now() - fetchedAt < BARS_REFETCH_MS) {
+    return store.getDailyBars(key, fromTime);
+  }
+
+  const bars = await fetchFromIb(p);
+  if (bars.length > 0) {
+    // Split-safety: IB rewrites history on stock splits. If the fresh fetch
+    // disagrees with stored closes on overlapping days, rebuild the contract.
+    const stored = await store.getDailyBars(key, fromTime);
+    const freshByTime = new Map(bars.map((b) => [b.time, b]));
+    const mismatch = stored.some((s) => {
+      const f = freshByTime.get(s.time);
+      return f != null && s.close > 0 && Math.abs(f.close - s.close) / s.close > 0.005;
+    });
+    if (mismatch) {
+      await store.replaceDailyBars(key, bars);
+      await store.setMeta(`bars_span:${key}`, String(fromTime));
+    } else {
+      await store.upsertDailyBars(key, bars);
+      await store.setMeta(`bars_span:${key}`, String(Math.min(coveredFrom, fromTime)));
+    }
+    await store.setMeta(`bars_fetched_at:${key}`, String(Date.now()));
+    // Serve from storage: it may hold a wider span than this fetch returned.
+    const merged = await store.getDailyBars(key, fromTime);
+    if (merged.length > 0) return merged;
+  }
+  return bars;
+}
+
 export async function getHistory(p: HistoryParams): Promise<HistoryBar[]> {
   const key = cacheKey(p);
 
@@ -94,26 +180,9 @@ export async function getHistory(p: HistoryParams): Promise<HistoryBar[]> {
   if (existing) return existing;
 
   const promise = (async () => {
-    const raw: Bar[] = await ib.api.getHistoricalData(
-      p.contract,
-      "", // endDateTime "" = now
-      p.duration,
-      p.barSize as BarSizeSetting,
-      WhatToShow.TRADES,
-      p.useRTH ? 1 : 0,
-      2, // formatDate=2 → epoch seconds
-    );
-    const bars = raw
-      .filter((b) => b.time != null && b.close != null)
-      .map<HistoryBar>((b) => ({
-        time: barTime(b.time as string | number),
-        open: b.open ?? b.close ?? 0,
-        high: b.high ?? b.close ?? 0,
-        low: b.low ?? b.close ?? 0,
-        close: b.close ?? 0,
-        volume: b.volume ?? 0,
-      }))
-      .sort((a, b) => a.time - b.time);
+    // Daily bars are persisted (immutable history); intraday stays fetch-through.
+    const bars =
+      p.barSize === "1 day" ? await getDailyHistory(p) : await fetchFromIb(p);
     historyCache.set(key, { bars, fetchedAt: now() });
     return bars;
   })();

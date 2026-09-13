@@ -91,6 +91,8 @@ export interface PnlSeries {
 export interface PnlHistory {
   series: PnlSeries[];
   errors: { symbol: string; message: string }[];
+  /** Epoch ms of the last successful trade-history fetch. */
+  tradesAsOf?: number;
 }
 
 async function getJSON<T>(url: string): Promise<T> {
@@ -116,4 +118,12 @@ export const api = {
   },
   portfolio: () => getJSON<Portfolio>("/api/portfolio"),
   pnl: (days: number) => getJSON<PnlHistory>(`/api/pnl?days=${days}`),
+  pnlRefresh: async (): Promise<{ ok: boolean; tradesAsOf?: number }> => {
+    const res = await fetch("/api/pnl/refresh", { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message ?? `${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  },
 };

@@ -8,4 +8,4 @@ tmp/
 web/dist/
 server/dist/
 *.tsbuildinfo
-.flex-cooldown.json
+server/.data/
