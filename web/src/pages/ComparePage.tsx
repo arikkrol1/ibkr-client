@@ -100,6 +100,11 @@ export function ComparePage() {
     });
   };
 
+  const removeAll = () => {
+    setEntries([]);
+    setHidden(new Set());
+  };
+
   const toggle = (key: string) =>
     setHidden((prev) => {
       const next = new Set(prev);
@@ -222,6 +227,13 @@ export function ComparePage() {
             className="rounded-md px-2 py-0.5 text-xs font-medium text-gray-400 hover:bg-gray-900 hover:text-gray-200"
           >
             Add all
+          </button>
+          <button
+            onClick={removeAll}
+            disabled={entries.length === 0}
+            className="rounded-md px-2 py-0.5 text-xs font-medium text-gray-400 transition-colors hover:bg-gray-900 hover:text-gray-200 disabled:cursor-default disabled:text-gray-700 disabled:hover:bg-transparent"
+          >
+            Remove all
           </button>
         </div>
       )}
