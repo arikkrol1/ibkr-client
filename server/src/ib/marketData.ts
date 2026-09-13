@@ -83,7 +83,7 @@ function barTime(raw: string | number): number {
   return Number(raw);
 }
 
-async function fetchFromIb(p: HistoryParams): Promise<HistoryBar[]> {
+async function requestBars(p: HistoryParams): Promise<HistoryBar[]> {
   const raw: Bar[] = await ib.api.getHistoricalData(
     p.contract,
     "", // endDateTime "" = now
@@ -104,6 +104,62 @@ async function fetchFromIb(p: HistoryParams): Promise<HistoryBar[]> {
       volume: b.volume ?? 0,
     }))
     .sort((a, b) => a.time - b.time);
+}
+
+// --- head-timestamp fallback: IB rejects durations reaching past a contract's ---
+// --- first bar (162 "failed to compute time length"), e.g. "50 Y" for a      ---
+// --- recently listed stock. Clamp to the available span and retry once.      ---
+
+const headTimeCache = new Map<string, number>();
+
+/** Parse IB's head-timestamp string: epoch seconds or "yyyymmdd[-hh:mm:ss]". */
+function parseIbTime(raw: string): number | undefined {
+  const s = String(raw).trim();
+  if (/^\d{9,}$/.test(s)) return Number(s);
+  const m = /^(\d{4})(\d{2})(\d{2})/.exec(s);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 1000;
+  return undefined;
+}
+
+/** Earliest available bar time (epoch seconds) for a contract, cached forever. */
+async function getHeadTime(contract: Contract, useRTH: boolean): Promise<number | undefined> {
+  const key = contractKeyOf(contract);
+  const cached = headTimeCache.get(key);
+  if (cached != null) return cached;
+  try {
+    const raw = await ib.api.getHeadTimestamp(contract, WhatToShow.TRADES, useRTH, 2);
+    const t = parseIbTime(raw);
+    if (t != null) headTimeCache.set(key, t);
+    return t;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Duration covering exactly the contract's available history, or undefined
+ * when the requested duration already fits (no clamp needed).
+ */
+function clampedDuration(requested: string, headTime: number): string | undefined {
+  const availableSec = Math.floor(Date.now() / 1000) - headTime;
+  if (availableSec <= 0 || durationSeconds(requested) <= availableSec) return undefined;
+  const days = Math.max(1, Math.ceil(availableSec / 86_400));
+  // IB caps day-unit durations around a year; switch to years beyond that.
+  return days <= 365 ? `${days} D` : `${Math.ceil(days / 365)} Y`;
+}
+
+async function fetchFromIb(p: HistoryParams): Promise<HistoryBar[]> {
+  try {
+    return await requestBars(p);
+  } catch (err) {
+    if (!/failed to compute time length/i.test(String((err as Error)?.message ?? err))) {
+      throw err;
+    }
+    const headTime = await getHeadTime(p.contract, p.useRTH);
+    const duration = headTime != null ? clampedDuration(p.duration, headTime) : undefined;
+    if (duration == null) throw err;
+    return requestBars({ ...p, duration });
+  }
 }
 
 // --- daily-bar persistence: past prices are immutable, so store them and ---
