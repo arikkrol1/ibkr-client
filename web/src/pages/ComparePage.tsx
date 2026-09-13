@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { api, type HistoryResponse, type SymbolMatch } from "../api";
+import { api, type HistoryBar, type HistoryResponse, type SymbolMatch } from "../api";
 import { CompareChart, type CompareMode } from "../components/CompareChart";
 import { SymbolSearch } from "../components/SymbolSearch";
 import { fmtPct, pnlColor } from "../utils/format";
@@ -39,6 +39,33 @@ const TIMEFRAMES: Timeframe[] = [
   { key: "ytd", label: "YTD", start: (n) => new Date(n.getFullYear(), 0, 1) },
 ];
 
+/**
+ * Curated benchmark universe for the Top performers selector: liquid,
+ * well-known tickers spanning asset classes so the ranking stays
+ * interesting in any market regime. Symbols use IBKR notation
+ * (e.g. "BRK B", not "BRK.B").
+ */
+const CURATED_GROUPS: { group: string; symbols: string[] }[] = [
+  { group: "Broad market ETFs", symbols: ["QQQ", "DIA", "IWM", "VTI", "EFA", "EEM"] },
+  { group: "Sector ETFs", symbols: ["XLK", "XLE", "XLF", "XLV", "XLI", "SMH"] },
+  { group: "Megacap tech", symbols: ["MSFT", "GOOGL", "AMZN", "META", "TSLA", "AVGO"] },
+  { group: "Large-cap non-tech", symbols: ["BRK B", "JPM", "LLY", "UNH", "XOM", "WMT"] },
+  { group: "Commodities / crypto / bonds", symbols: ["GLD", "SLV", "USO", "TLT"] },
+];
+const CURATED_SYMBOLS = CURATED_GROUPS.flatMap((g) => g.symbols);
+
+/** % change over the timeframe window, measured against the prior close. */
+function windowPct(bars: HistoryBar[], startSec: number): number | undefined {
+  let idx = bars.findIndex((b) => b.time >= startSec);
+  if (idx === -1) idx = bars.length;
+  const w = bars.slice(Math.max(0, idx - 1));
+  const base = w[0]?.close;
+  const last = w[w.length - 1]?.close;
+  return base != null && last != null && base !== 0
+    ? ((last - base) / Math.abs(base)) * 100
+    : undefined;
+}
+
 const MODES: { key: CompareMode; label: string }[] = [
   { key: "pct", label: "% Change" },
   { key: "price", label: "Price" },
@@ -66,6 +93,7 @@ export function ComparePage() {
   const [tfKey, setTfKey] = useState("month");
   const [mode, setMode] = useState<CompareMode>("pct");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [showTop, setShowTop] = useState(false);
 
   const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[1];
   const startSec = useMemo(() => Math.floor(tf.start(new Date()).getTime() / 1000), [tf]);
@@ -77,6 +105,31 @@ export function ComparePage() {
     staleTime: 60_000,
   });
   const holdings = (portfolio.data?.positions ?? []).filter((p) => p.symbol);
+
+  // Curated-universe bars, fetched only once the section is expanded.
+  const curatedResults = useQueries({
+    queries: CURATED_SYMBOLS.map((s) => ({
+      queryKey: ["dailyBars", s, duration],
+      queryFn: () => api.history({ symbol: s, barSize: "1 day", duration }),
+      staleTime: 5 * 60_000,
+      enabled: showTop,
+      retry: 1,
+      placeholderData: (prev: HistoryResponse | undefined) => prev,
+    })),
+  });
+
+  const topPerformers = useMemo(() => {
+    if (!showTop) return [];
+    const held = new Set(holdings.map((p) => p.symbol));
+    return CURATED_SYMBOLS.map((s, i) => ({
+      symbol: s,
+      pct: windowPct(curatedResults[i]?.data?.bars ?? [], startSec),
+    }))
+      .filter((r) => r.pct != null && !held.has(r.symbol))
+      .sort((a, b) => b.pct! - a.pct!)
+      .slice(0, 5);
+  }, [showTop, curatedResults, startSec, holdings]);
+  const curatedLoading = showTop && curatedResults.some((r) => r.isLoading);
 
   const results = useQueries({
     queries: entries.map((e) => ({
@@ -211,7 +264,7 @@ export function ComparePage() {
       <SymbolSearch onSelect={addSymbol} />
 
       {holdings.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex cursor-default select-none flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500">Holdings:</span>
           {holdings.map((p) => {
             const added = entries.some(
@@ -249,9 +302,92 @@ export function ComparePage() {
         </div>
       )}
 
+      <div className="cursor-default select-none">
+        <button
+          onClick={() => setShowTop((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+        >
+          <span
+            className={`inline-block text-[10px] transition-transform ${showTop ? "rotate-90" : ""}`}
+          >
+            ▶
+          </span>
+          Top performers
+          {showTop && <span className="font-normal text-gray-600">({tf.label})</span>}
+        </button>
+        {showTop && (
+          <div className="mt-2 space-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {curatedLoading ? (
+                <span className="text-xs text-gray-500">
+                  Ranking {CURATED_SYMBOLS.length} symbols…
+                </span>
+              ) : topPerformers.length === 0 ? (
+                <span className="text-xs text-gray-500">No data for this timeframe.</span>
+              ) : (
+                topPerformers.map((r) => {
+                  const added = entries.some((e) => e.symbol === r.symbol);
+                  return (
+                    <button
+                      key={r.symbol}
+                      onClick={() => addSymbol({ symbol: r.symbol })}
+                      disabled={added}
+                      title={added ? "Already on the chart" : "Add to chart"}
+                      className={`rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
+                        added
+                          ? "cursor-default border-gray-800 text-gray-600"
+                          : "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+                      }`}
+                    >
+                      {r.symbol}
+                      <span className={`ml-1.5 tabular-nums ${added ? "" : pnlColor(r.pct)}`}>
+                        {fmtPct(r.pct)}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <table className="text-xs">
+              <tbody>
+                {CURATED_GROUPS.map((g) => (
+                  <tr key={g.group} className="border-b border-gray-900 last:border-0">
+                    <td className="py-1 pr-4 whitespace-nowrap align-top text-gray-500">
+                      {g.group}
+                    </td>
+                    <td className="py-1">
+                      <span className="flex flex-wrap gap-x-2.5 gap-y-0.5">
+                        {g.symbols.map((s) => {
+                          const added = entries.some((e) => e.symbol === s);
+                          return (
+                            <button
+                              key={s}
+                              onClick={() => addSymbol({ symbol: s })}
+                              disabled={added}
+                              title={added ? "Already on the chart" : "Add to chart"}
+                              className={`transition-colors ${
+                                added
+                                  ? "cursor-default text-gray-600"
+                                  : "text-gray-300 hover:text-white hover:underline"
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
         {/* Legend: click a chip to toggle the series, × to remove it */}
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex cursor-default select-none flex-wrap gap-1.5">
           {rows.map(({ entry, pct, isLoading, error }) => {
             const off = hidden.has(entry.key);
             return (
