@@ -61,7 +61,9 @@ export function CompareChart({ series, mode, hidden, colorFor }: Props) {
         horzLines: { color: "#1f2937" },
       },
       rightPriceScale: { borderColor: "#374151" },
-      timeScale: { borderColor: "#374151", timeVisible: false },
+      // minBarSpacing: the 0.5px default caps fitContent at ~2000 bars, which
+      // silently clips the left of decade-deep windows (10Y/Max).
+      timeScale: { borderColor: "#374151", timeVisible: false, minBarSpacing: 0.001 },
       autoSize: true,
     });
     chartRef.current = chart;

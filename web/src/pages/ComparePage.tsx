@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { api, type SymbolMatch } from "../api";
+import { api, type HistoryResponse, type SymbolMatch } from "../api";
 import { CompareChart, type CompareMode } from "../components/CompareChart";
 import { SymbolSearch } from "../components/SymbolSearch";
 import { fmtPct, pnlColor } from "../utils/format";
@@ -10,6 +10,11 @@ interface Timeframe {
   key: string;
   label: string;
   start: (now: Date) => Date;
+  /**
+   * IBKR duration to fetch (default "1 Y"). Daily bars are served back to
+   * the instrument's inception when the ask exceeds available history.
+   */
+  duration?: string;
 }
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -18,6 +23,9 @@ const TIMEFRAMES: Timeframe[] = [
   { key: "week", label: "Week", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 7) },
   { key: "month", label: "Month", start: (n) => new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()) },
   { key: "year", label: "Year", start: (n) => new Date(n.getFullYear() - 1, n.getMonth(), n.getDate()) },
+  { key: "5y", label: "5Y", start: (n) => new Date(n.getFullYear() - 5, n.getMonth(), n.getDate()), duration: "5 Y" },
+  { key: "10y", label: "10Y", start: (n) => new Date(n.getFullYear() - 10, n.getMonth(), n.getDate()), duration: "10 Y" },
+  { key: "max", label: "Max", start: () => new Date(0), duration: "50 Y" },
   {
     key: "wtd",
     label: "WTD",
@@ -61,6 +69,7 @@ export function ComparePage() {
 
   const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[1];
   const startSec = useMemo(() => Math.floor(tf.start(new Date()).getTime() / 1000), [tf]);
+  const duration = tf.duration ?? "1 Y";
 
   const portfolio = useQuery({
     queryKey: ["portfolio"],
@@ -71,10 +80,12 @@ export function ComparePage() {
 
   const results = useQueries({
     queries: entries.map((e) => ({
-      queryKey: ["dailyBars", e.conId ?? e.symbol],
+      queryKey: ["dailyBars", e.conId ?? e.symbol, duration],
       queryFn: () =>
-        api.history({ symbol: e.symbol, conId: e.conId, barSize: "1 day", duration: "1 Y" }),
+        api.history({ symbol: e.symbol, conId: e.conId, barSize: "1 day", duration }),
       staleTime: 5 * 60_000,
+      // Keep the current lines on screen while a deeper duration loads.
+      placeholderData: (prev: HistoryResponse | undefined) => prev,
     })),
   });
 
