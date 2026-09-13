@@ -4,6 +4,7 @@ import {
   createChart,
   AreaSeries,
   ColorType,
+  LineStyle,
   type IChartApi,
   type ISeriesApi,
   type UTCTimestamp,
@@ -174,7 +175,7 @@ function MiniPriceChart({
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { visible: false },
+        horzLines: { color: "#1f2937", style: LineStyle.Dotted },
       },
       rightPriceScale: {
         borderVisible: false,
