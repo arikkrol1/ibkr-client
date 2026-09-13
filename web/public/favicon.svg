@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0b0e11"/>
+  <!-- rising candlesticks, left-low to right-high -->
+  <g stroke-linecap="round">
+    <line x1="15" y1="30" x2="15" y2="54" stroke="#26a69a" stroke-width="3"/>
+    <rect x="9.5" y="35" width="11" height="14" rx="2" fill="#26a69a"/>
+    <line x1="32" y1="18" x2="32" y2="42" stroke="#ef5350" stroke-width="3"/>
+    <rect x="26.5" y="23" width="11" height="12" rx="2" fill="#ef5350"/>
+    <line x1="49" y1="8" x2="49" y2="34" stroke="#26a69a" stroke-width="3"/>
+    <rect x="43.5" y="13" width="11" height="16" rx="2" fill="#26a69a"/>
+  </g>
+</svg>
