@@ -55,8 +55,8 @@ function aggregateByMonth(series: PnlSeries[]): PeriodPnl | null {
   }
 
   // Portfolio cumulative P&L and gross market value at each month end.
-  const cum = new Array<number>(months.length).fill(0);
-  const mvAbs = new Array<number>(months.length).fill(0);
+  let cum = new Array<number>(months.length).fill(0);
+  let mvAbs = new Array<number>(months.length).fill(0);
   for (const s of series) {
     let i = 0;
     let lastValue = 0;
@@ -72,9 +72,17 @@ function aggregateByMonth(series: PnlSeries[]): PeriodPnl | null {
     }
   }
 
+  // Price bars can predate the first trade — drop leading months with no
+  // activity so the table starts at the account's first real position.
+  const firstActive = cum.findIndex((v, b) => Math.abs(v) > 0.005 || mvAbs[b] > 0.005);
+  if (firstActive < 0) return null;
+  const active = months.slice(firstActive);
+  cum = cum.slice(firstActive);
+  mvAbs = mvAbs.slice(firstActive);
+
   const byMonth = new Map<string, number>();
   const byYear = new Map<number, number>();
-  months.forEach((mo, b) => {
+  active.forEach((mo, b) => {
     const pnl = cum[b] - (b > 0 ? cum[b - 1] : 0);
     byMonth.set(`${mo.y}-${mo.m}`, pnl);
     byYear.set(mo.y, (byYear.get(mo.y) ?? 0) + pnl);
@@ -85,7 +93,7 @@ function aggregateByMonth(series: PnlSeries[]): PeriodPnl | null {
   // of the series trading by that year's end — mirrors PnlPctChart's fallback.
   const byYearPct = new Map<number, number | undefined>();
   for (const [year, pnl] of byYear) {
-    const prior = months.findIndex((mo) => mo.y === year - 1 && mo.m === 11);
+    const prior = active.findIndex((mo) => mo.y === year - 1 && mo.m === 11);
     let denom = prior >= 0 ? mvAbs[prior] : 0;
     if (denom < 1e-6) {
       const yearEndSec = Date.UTC(year + 1, 0, 1) / 1000;

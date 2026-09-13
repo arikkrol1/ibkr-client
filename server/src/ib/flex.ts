@@ -176,6 +176,29 @@ function tradeKeyOf(t: FlexTrade): string {
   return t.tradeId ?? `${t.conId ?? t.symbol}|${t.time}|${t.quantity}|${t.price}`;
 }
 
+/**
+ * Parse a Flex statement XML into trades. Returns null when the XML is a
+ * "still generating" placeholder (error 1019); throws on other Flex errors.
+ */
+export function parseFlexStatementXml(xml: string): FlexTrade[] | null {
+  const stmt = parser.parse(xml);
+  const err = (stmt.FlexStatementResponse ?? {}) as Record<string, unknown>;
+  if (err.ErrorCode != null) {
+    if (String(err.ErrorCode) === "1019") return null; // still generating
+    throw new Error(`Flex GetStatement failed: ${err.ErrorMessage ?? err.ErrorCode}`);
+  }
+  const nodes: Record<string, string>[] = [];
+  collectTradeNodes(stmt, nodes);
+  const all = nodes
+    .map(toTrade)
+    .filter((t): t is FlexTrade & { detail?: string } => t !== null);
+  // A query can include both ORDER and EXECUTION detail for the same fills —
+  // keep one level only (prefer executions) to avoid double counting.
+  const executions = all.filter((t) => t.detail === "EXECUTION");
+  const chosen = executions.length > 0 ? executions : all;
+  return chosen.map(({ detail: _detail, ...t }) => t);
+}
+
 async function fetchQueryStatement(
   queryId: string,
 ): Promise<{ trades: FlexTrade[]; xml: string }> {
@@ -195,24 +218,33 @@ async function fetchQueryStatement(
   for (let attempt = 0; attempt < 10; attempt++) {
     if (attempt > 0) await sleep(2000);
     const xml = await fetchText(`${baseUrl}?q=${refCode}&t=${token}&v=3`);
-    const stmt = parser.parse(xml);
-    const err = (stmt.FlexStatementResponse ?? {}) as Record<string, unknown>;
-    if (err.ErrorCode != null) {
-      if (String(err.ErrorCode) === "1019") continue; // still generating
-      throw new Error(`Flex GetStatement failed: ${err.ErrorMessage ?? err.ErrorCode}`);
-    }
-    const nodes: Record<string, string>[] = [];
-    collectTradeNodes(stmt, nodes);
-    const all = nodes
-      .map(toTrade)
-      .filter((t): t is FlexTrade & { detail?: string } => t !== null);
-    // A query can include both ORDER and EXECUTION detail for the same fills —
-    // keep one level only (prefer executions) to avoid double counting.
-    const executions = all.filter((t) => t.detail === "EXECUTION");
-    const chosen = executions.length > 0 ? executions : all;
-    return { trades: chosen.map(({ detail: _detail, ...t }) => t), xml };
+    const trades = parseFlexStatementXml(xml);
+    if (trades == null) continue;
+    return { trades, xml };
   }
   throw new Error("Flex statement generation timed out");
+}
+
+/**
+ * Import a manually downloaded Flex statement XML (Client Portal → Flex
+ * Queries → run with a custom date range — the only way past the web
+ * service's 365-day lookback cap). Archives the raw XML and merges trades;
+ * already-known tradeKeys are ignored, so overlapping statements are safe.
+ */
+export async function importFlexStatement(
+  xml: string,
+  label: string,
+): Promise<{ parsed: number; inserted: number }> {
+  const trades = parseFlexStatementXml(xml);
+  if (trades == null) {
+    throw new Error("XML is a pending-statement placeholder (Flex error 1019), not a statement");
+  }
+  const store = getStorage();
+  await store.archiveFlexStatement(label, xml);
+  const inserted = await store.upsertTrades(
+    trades.map((t) => ({ ...t, tradeKey: tradeKeyOf(t) })),
+  );
+  return { parsed: trades.length, inserted };
 }
 
 async function activeCooldown(): Promise<Cooldown | null> {

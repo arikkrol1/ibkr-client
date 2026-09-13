@@ -201,6 +201,30 @@ async function flexHistory(days: number): Promise<PnlHistory> {
       const replayedQty = group.reduce((q, t) => q + t.quantity, 0);
       const missing = p.position - replayedQty;
       if (Math.abs(missing) < EPS) continue;
+      // Flex trades record pre-split quantities/prices while IB's bars and the
+      // current position are split-adjusted. A position that is an exact
+      // integer multiple (or divisor, for reverse splits) of the replayed
+      // quantity is a split, not missing shares — rescale the trades instead
+      // of seeding phantom ones. Realized $ amounts are unchanged by this.
+      if (Math.abs(replayedQty) > EPS && Math.sign(replayedQty) === Math.sign(p.position)) {
+        const ratio = p.position / replayedQty;
+        const fwd = Math.round(ratio);
+        const rev = Math.round(1 / ratio);
+        if (fwd >= 2 && Math.abs(ratio - fwd) < 0.01 * fwd) {
+          for (const t of group) {
+            t.quantity *= fwd;
+            t.price /= fwd;
+          }
+          continue;
+        }
+        if (rev >= 2 && Math.abs(1 / ratio - rev) < 0.01 * rev) {
+          for (const t of group) {
+            t.quantity /= rev;
+            t.price *= rev;
+          }
+          continue;
+        }
+      }
       const multiplier =
         p.marketPrice && p.marketValue && p.position
           ? Math.round((p.marketValue / (p.marketPrice * p.position)) * 100) / 100 || 1
