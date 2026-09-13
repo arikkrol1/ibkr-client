@@ -4,6 +4,7 @@ import { api, type PnlSeries } from "../api";
 import { PnlChart } from "../components/PnlChart";
 import { PnlPctChart } from "../components/PnlPctChart";
 import { fmtMoney, pnlColor } from "../utils/format";
+import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 
 const RANGES = [
   { label: "1M", days: 30 },
@@ -13,24 +14,6 @@ const RANGES = [
   { label: "2Y", days: 730 },
   { label: "5Y", days: 1825 },
 ] as const;
-
-/**
- * Categorical palette (validated for CVD separation + contrast on #0b0e11).
- * Slots are assigned to symbols in fixed alphabetical order, never cycled;
- * symbols beyond the 8 slots fall back to a muted slate and rely on the
- * legend + tooltip for identity.
- */
-const PALETTE = [
-  "#3987e5", // blue
-  "#199e70", // aqua
-  "#c98500", // yellow
-  "#008300", // green
-  "#9085e9", // violet
-  "#e66767", // red
-  "#d55181", // magenta
-  "#d95926", // orange
-];
-const OVERFLOW_COLOR = "#64748b";
 
 export function PnLPage() {
   const [days, setDays] = useState<number>(90);
