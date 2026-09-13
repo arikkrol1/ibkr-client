@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type PortfolioPosition } from "../api";
 import { AllocationChart } from "../components/AllocationChart";
 import { HoldingsCharts } from "../components/HoldingsCharts";
+import { PnlByPeriod } from "../components/PnlByPeriod";
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from "../utils/format";
 
 export function DashboardPage() {
@@ -47,6 +48,8 @@ export function DashboardPage() {
           tone={pnlColor(b.unrealizedPnL)}
         />
       </div>
+
+      <PnlByPeriod />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Positions table */}
