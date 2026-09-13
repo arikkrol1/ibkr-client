@@ -3,6 +3,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { api, type HistoryBar, type HistoryResponse, type SymbolMatch } from "../api";
 import { CompareChart, type CompareMode } from "../components/CompareChart";
 import { SymbolSearch } from "../components/SymbolSearch";
+import { SymbolTip } from "../components/SymbolTip";
 import { fmtPct, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 
@@ -271,19 +272,19 @@ export function ComparePage() {
               (e) => (p.conId && e.conId === p.conId) || e.symbol === p.symbol,
             );
             return (
-              <button
-                key={p.conId ?? p.symbol}
-                onClick={() => addSymbol({ symbol: p.symbol, conId: p.conId })}
-                disabled={added}
-                title={added ? "Already on the chart" : "Add to chart"}
-                className={`rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
-                  added
-                    ? "cursor-default border-gray-800 text-gray-600"
-                    : "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
-                }`}
-              >
-                {p.symbol}
-              </button>
+              <SymbolTip key={p.conId ?? p.symbol} symbol={p.symbol} conId={p.conId}>
+                <button
+                  onClick={() => addSymbol({ symbol: p.symbol, conId: p.conId })}
+                  disabled={added}
+                  className={`rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
+                    added
+                      ? "cursor-default border-gray-800 text-gray-600"
+                      : "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+                  }`}
+                >
+                  {p.symbol}
+                </button>
+              </SymbolTip>
             );
           })}
           <button
@@ -328,22 +329,22 @@ export function ComparePage() {
                 topPerformers.map((r) => {
                   const added = entries.some((e) => e.symbol === r.symbol);
                   return (
-                    <button
-                      key={r.symbol}
-                      onClick={() => addSymbol({ symbol: r.symbol })}
-                      disabled={added}
-                      title={added ? "Already on the chart" : "Add to chart"}
-                      className={`rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
-                        added
-                          ? "cursor-default border-gray-800 text-gray-600"
-                          : "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
-                      }`}
-                    >
-                      {r.symbol}
-                      <span className={`ml-1.5 tabular-nums ${added ? "" : pnlColor(r.pct)}`}>
-                        {fmtPct(r.pct)}
-                      </span>
-                    </button>
+                    <SymbolTip key={r.symbol} symbol={r.symbol}>
+                      <button
+                        onClick={() => addSymbol({ symbol: r.symbol })}
+                        disabled={added}
+                        className={`rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
+                          added
+                            ? "cursor-default border-gray-800 text-gray-600"
+                            : "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+                        }`}
+                      >
+                        {r.symbol}
+                        <span className={`ml-1.5 tabular-nums ${added ? "" : pnlColor(r.pct)}`}>
+                          {fmtPct(r.pct)}
+                        </span>
+                      </button>
+                    </SymbolTip>
                   );
                 })
               )}
@@ -360,19 +361,19 @@ export function ComparePage() {
                         {g.symbols.map((s) => {
                           const added = entries.some((e) => e.symbol === s);
                           return (
-                            <button
-                              key={s}
-                              onClick={() => addSymbol({ symbol: s })}
-                              disabled={added}
-                              title={added ? "Already on the chart" : "Add to chart"}
-                              className={`transition-colors ${
-                                added
-                                  ? "cursor-default text-gray-600"
-                                  : "text-gray-300 hover:text-white hover:underline"
-                              }`}
-                            >
-                              {s}
-                            </button>
+                            <SymbolTip key={s} symbol={s}>
+                              <button
+                                onClick={() => addSymbol({ symbol: s })}
+                                disabled={added}
+                                className={`transition-colors ${
+                                  added
+                                    ? "cursor-default text-gray-600"
+                                    : "text-gray-300 hover:text-white hover:underline"
+                                }`}
+                              >
+                                {s}
+                              </button>
+                            </SymbolTip>
                           );
                         })}
                       </span>

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ib } from "../ib/connection.js";
-import { searchSymbols, resolveContract } from "../ib/contracts.js";
+import { searchSymbols, resolveContract, getSymbolInfo } from "../ib/contracts.js";
 import { getHistory } from "../ib/marketData.js";
 
 function requireConnected() {
@@ -19,6 +19,15 @@ export async function registerMarketRoutes(app: FastifyInstance) {
     const matches = await searchSymbols(q);
     return { matches };
   });
+
+  app.get<{ Querystring: { symbol?: string; conId?: string } }>(
+    "/api/symbol-info",
+    async (req) => {
+      requireConnected();
+      const { symbol, conId } = req.query;
+      return getSymbolInfo({ symbol, conId: conId ? Number(conId) : undefined });
+    },
+  );
 
   app.get<{
     Querystring: {

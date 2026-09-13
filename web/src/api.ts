@@ -25,6 +25,20 @@ export interface SymbolMatch {
   primaryExch?: string;
 }
 
+export interface SymbolInfo {
+  conId?: number;
+  symbol?: string;
+  longName?: string;
+  secType?: string;
+  /** IBKR stock classification, e.g. "COMMON", "ETF", "ETN", "ADR". */
+  stockType?: string;
+  industry?: string;
+  category?: string;
+  subcategory?: string;
+  currency?: string;
+  primaryExch?: string;
+}
+
 export interface HistoryBar {
   time: number;
   open: number;
@@ -108,6 +122,12 @@ export const api = {
   health: () => getJSON<Health>("/api/health"),
   search: (q: string) =>
     getJSON<{ matches: SymbolMatch[] }>(`/api/search?q=${encodeURIComponent(q)}`),
+  symbolInfo: (params: { symbol?: string; conId?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.symbol) qs.set("symbol", params.symbol);
+    if (params.conId) qs.set("conId", String(params.conId));
+    return getJSON<SymbolInfo>(`/api/symbol-info?${qs.toString()}`);
+  },
   history: (params: { symbol?: string; conId?: number; barSize: string; duration: string }) => {
     const qs = new URLSearchParams();
     if (params.symbol) qs.set("symbol", params.symbol);
