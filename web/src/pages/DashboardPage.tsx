@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type PortfolioPosition } from "../api";
 import { AllocationChart } from "../components/AllocationChart";
+import { HoldingsCharts } from "../components/HoldingsCharts";
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from "../utils/format";
 
 export function DashboardPage() {
@@ -66,6 +67,9 @@ export function DashboardPage() {
           <AllocationChart positions={data.positions} />
         </div>
       </div>
+
+      {/* Per-holding price charts */}
+      <HoldingsCharts positions={data.positions} />
     </div>
   );
 }
