@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { api, type SymbolMatch } from "../api";
 import { CompareChart, type CompareMode } from "../components/CompareChart";
 import { SymbolSearch } from "../components/SymbolSearch";
@@ -61,6 +61,13 @@ export function ComparePage() {
 
   const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[1];
   const startSec = useMemo(() => Math.floor(tf.start(new Date()).getTime() / 1000), [tf]);
+
+  const portfolio = useQuery({
+    queryKey: ["portfolio"],
+    queryFn: api.portfolio,
+    staleTime: 60_000,
+  });
+  const holdings = (portfolio.data?.positions ?? []).filter((p) => p.symbol);
 
   const results = useQueries({
     queries: entries.map((e) => ({
@@ -186,6 +193,38 @@ export function ComparePage() {
       </div>
 
       <SymbolSearch onSelect={addSymbol} />
+
+      {holdings.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-gray-500">Holdings:</span>
+          {holdings.map((p) => {
+            const added = entries.some(
+              (e) => (p.conId && e.conId === p.conId) || e.symbol === p.symbol,
+            );
+            return (
+              <button
+                key={p.conId ?? p.symbol}
+                onClick={() => addSymbol({ symbol: p.symbol, conId: p.conId })}
+                disabled={added}
+                title={added ? "Already on the chart" : "Add to chart"}
+                className={`rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
+                  added
+                    ? "cursor-default border-gray-800 text-gray-600"
+                    : "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+                }`}
+              >
+                {p.symbol}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => holdings.forEach((p) => addSymbol({ symbol: p.symbol, conId: p.conId }))}
+            className="rounded-md px-2 py-0.5 text-xs font-medium text-gray-400 hover:bg-gray-900 hover:text-gray-200"
+          >
+            Add all
+          </button>
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
         {/* Legend: click a chip to toggle the series, × to remove it */}
