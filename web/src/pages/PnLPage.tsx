@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type PnlSeries } from "../api";
 import { PnlChart } from "../components/PnlChart";
 import { PnlPctChart } from "../components/PnlPctChart";
+import { YearlyBreakdown } from "../components/YearlyBreakdown";
 import { fmtMoney, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 
@@ -15,9 +16,13 @@ const RANGES = [
   { label: "5Y", days: 1825 },
 ] as const;
 
+const STATUS_FILTERS = ["All", "Open", "Closed"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
 export function PnLPage() {
   const [days, setDays] = useState<number>(90);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -53,15 +58,22 @@ export function PnLPage() {
   }, [data]);
   const colorFor = (key: string) => colorMap.get(key) ?? OVERFLOW_COLOR;
 
+  const matchesStatus = (s: PnlSeries) =>
+    statusFilter === "All" || (statusFilter === "Closed" ? s.closed : !s.closed);
+
+  // Series shown in the top chart's legend, honoring the Open/Closed filter.
+  const filteredSeries = data?.series.filter(matchesStatus) ?? [];
+
   // Line-chart view of the selected range.
   const chartSeries = useMemo(() => {
     if (!data) return [];
     const cutoff = Date.now() / 1000 - days * 86_400;
-    return data.series.map((s) => ({
+    return data.series.filter(matchesStatus).map((s) => ({
       ...s,
       points: s.points.filter((p) => p.time >= cutoff),
     }));
-  }, [data, days]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, days, statusFilter]);
 
   const toggle = (key: string) =>
     setHidden((prev) => {
@@ -75,9 +87,18 @@ export function PnLPage() {
   if (isError) return <Centered tone="error">{(error as Error).message}</Centered>;
   if (!data) return null;
 
-  const visibleTotal = data.series
+  const visibleTotal = filteredSeries
     .filter((s) => !hidden.has(s.key))
     .reduce((sum, s) => sum + s.total, 0);
+  const allHidden = filteredSeries.length > 0 && filteredSeries.every((s) => hidden.has(s.key));
+
+  // Hide/show only the series matching the current status filter.
+  const toggleAll = () =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      filteredSeries.forEach((s) => (allHidden ? next.delete(s.key) : next.add(s.key)));
+      return next;
+    });
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -106,6 +127,27 @@ export function PnLPage() {
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
+          <button
+            onClick={toggleAll}
+            className="rounded-md border border-gray-700 px-2.5 py-1 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:text-white"
+          >
+            {allHidden ? "Add all" : "Remove all"}
+          </button>
+          <div className="flex gap-1">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  statusFilter === f
+                    ? "bg-gray-800 text-white"
+                    : "text-gray-400 hover:bg-gray-900 hover:text-gray-200"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-1">
             {RANGES.map((r) => (
               <button
@@ -129,15 +171,15 @@ export function PnLPage() {
       )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-        {data.series.length === 0 ? (
+        {filteredSeries.length === 0 ? (
           <p className="py-16 text-center text-sm text-gray-500">
-            No positions or trade history found for this range.
+            No positions or trade history found for this range and filter.
           </p>
         ) : (
           <>
             {/* Legend: click a chip to toggle the series */}
             <div className="mb-3 flex flex-wrap gap-1.5">
-              {data.series.map((s) => {
+              {filteredSeries.map((s) => {
                 const off = hidden.has(s.key);
                 return (
                   <button
@@ -171,6 +213,8 @@ export function PnLPage() {
       {data.series.length > 0 && <PnlPctChart series={data.series} colorFor={colorFor} />}
 
       {data.series.length > 0 && <BreakdownTable series={data.series} colorFor={colorFor} />}
+
+      <YearlyBreakdown />
 
       {data.errors.length > 0 && (
         <p className="text-xs text-gray-600">
