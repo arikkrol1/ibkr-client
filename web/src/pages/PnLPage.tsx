@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type PnlSeries } from "../api";
 import { PnlChart } from "../components/PnlChart";
 import { PnlPctChart } from "../components/PnlPctChart";
+import { YearlyBreakdown } from "../components/YearlyBreakdown";
 import { fmtMoney, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 
@@ -171,6 +172,8 @@ export function PnLPage() {
       {data.series.length > 0 && <PnlPctChart series={data.series} colorFor={colorFor} />}
 
       {data.series.length > 0 && <BreakdownTable series={data.series} colorFor={colorFor} />}
+
+      <YearlyBreakdown />
 
       {data.errors.length > 0 && (
         <p className="text-xs text-gray-600">
