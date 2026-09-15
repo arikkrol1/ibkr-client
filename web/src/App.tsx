@@ -4,6 +4,7 @@ import { ChartPage } from "./pages/ChartPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PnLPage } from "./pages/PnLPage";
+import { SectorsPage } from "./pages/SectorsPage";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Tab to="/pnl">P&L</Tab>
           <Tab to="/compare">Compare</Tab>
           <Tab to="/chart">Charts</Tab>
+          <Tab to="/sectors">Sectors</Tab>
         </nav>
       </header>
       <ConnectionBanner />
@@ -26,6 +28,7 @@ export default function App() {
           <Route path="/pnl" element={<PnLPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/chart" element={<ChartPage />} />
+          <Route path="/sectors" element={<SectorsPage />} />
         </Routes>
       </main>
     </div>
