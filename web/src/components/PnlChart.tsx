@@ -48,6 +48,8 @@ export function PnlChart({ series, hidden, colorFor }: Props) {
       },
       rightPriceScale: { borderColor: "#374151" },
       timeScale: { borderColor: "#374151", timeVisible: false },
+      handleScroll: false,
+      handleScale: false,
       autoSize: true,
     });
     chartRef.current = chart;
