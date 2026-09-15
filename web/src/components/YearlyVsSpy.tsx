@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type HistoryBar, type PnlSeries } from "../api";
-import { fmtPct, pnlColor } from "../utils/format";
+import { fmtMoney, fmtPct, pnlColor } from "../utils/format";
 import { PALETTE } from "../utils/palette";
 
 // Widest span the /api/pnl endpoint accepts (5 years).
@@ -16,10 +16,18 @@ const MONTH_LABELS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+interface SymbolPnl {
+  symbol: string;
+  /** P&L in dollars accrued this month. */
+  pnl: number;
+}
+
 interface MonthCompare {
   month: number;
   portfolio?: number;
   spy?: number;
+  /** Symbols with nonzero P&L this month, winners first. */
+  symbols?: SymbolPnl[];
 }
 
 interface YearsVsSpy {
@@ -61,10 +69,14 @@ function compareByMonth(series: PnlSeries[], bars: HistoryBar[]): YearsVsSpy | n
     }
   }
 
-  // Portfolio cumulative P&L and gross market value at each month end.
+  // Portfolio cumulative P&L (total and per symbol) and gross market value at
+  // each month end.
   const cum = new Array<number>(months.length).fill(0);
   const mvAbs = new Array<number>(months.length).fill(0);
+  const bySymbol = new Map<string, number[]>();
   for (const s of series) {
+    let symCum = bySymbol.get(s.symbol);
+    if (!symCum) bySymbol.set(s.symbol, (symCum = new Array<number>(months.length).fill(0)));
     let i = 0;
     let lastValue = 0;
     let lastMv = 0;
@@ -75,6 +87,7 @@ function compareByMonth(series: PnlSeries[], bars: HistoryBar[]): YearsVsSpy | n
         i += 1;
       }
       cum[b] += lastValue;
+      symCum[b] += lastValue;
       mvAbs[b] += Math.abs(lastMv);
     }
   }
@@ -122,11 +135,18 @@ function compareByMonth(series: PnlSeries[], bars: HistoryBar[]): YearsVsSpy | n
         ? (close / prevClose - 1) * 100
         : undefined;
 
+    const symbols: SymbolPnl[] = [];
+    for (const [symbol, symCum] of bySymbol) {
+      const symPnl = symCum[b] - (b > 0 ? symCum[b - 1] : 0);
+      if (Math.abs(symPnl) > 0.005) symbols.push({ symbol, pnl: symPnl });
+    }
+    symbols.sort((a, z) => z.pnl - a.pnl);
+
     let list = byYear.get(mo.y);
     if (!list) {
       byYear.set(mo.y, (list = MONTH_LABELS.map((_, month) => ({ month }))));
     }
-    list[mo.m] = { month: mo.m, portfolio, spy };
+    list[mo.m] = { month: mo.m, portfolio, spy, symbols };
   }
 
   return { years: [...byYear.keys()].sort((a, b) => a - b), byYear };
@@ -142,6 +162,57 @@ function compound(values: (number | undefined)[]): number | undefined {
     any = true;
   }
   return any ? (acc - 1) * 100 : undefined;
+}
+
+interface CumPoint {
+  month: number;
+  /** Cumulative YTD % return through this month end. */
+  portfolio: number;
+  spy: number;
+  /** This month's return (spy undefined when no price history yet). */
+  monthPortfolio: number;
+  monthSpy?: number;
+  /** This month's per-symbol P&L in dollars, winners first. */
+  symbols: SymbolPnl[];
+}
+
+/**
+ * Compound monthly returns into cumulative YTD series. SPY compounds only
+ * over months the portfolio was active (a missing SPY month counts as flat),
+ * matching the header totals.
+ */
+function cumulative(rows: MonthCompare[]): CumPoint[] {
+  const points: CumPoint[] = [];
+  let accP = 1;
+  let accS = 1;
+  for (const r of rows) {
+    if (r.portfolio == null) continue;
+    accP *= 1 + r.portfolio / 100;
+    if (r.spy != null) accS *= 1 + r.spy / 100;
+    points.push({
+      month: r.month,
+      portfolio: (accP - 1) * 100,
+      spy: (accS - 1) * 100,
+      monthPortfolio: r.portfolio,
+      monthSpy: r.spy,
+      symbols: r.symbols ?? [],
+    });
+  }
+  return points;
+}
+
+/** Gridline positions: multiples of a 1/2/5 step spanning [min, max]. */
+function niceTicks(min: number, max: number): number[] {
+  const raw = (max - min) / 4;
+  if (!(raw > 0)) return [0];
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  const ticks: number[] = [];
+  for (let t = Math.ceil(min / step) * step; t <= max + step / 1e6; t += step) {
+    const v = Math.round(t * 1e6) / 1e6;
+    ticks.push(v === 0 ? 0 : v);
+  }
+  return ticks;
 }
 
 /** Monthly % return of the whole account vs SPY for a selectable year. */
@@ -176,19 +247,34 @@ export function YearlyVsSpy() {
   // account start compares like-for-like.
   const yearSpy = compound(rows.map((r) => (r.portfolio != null ? r.spy : undefined)));
 
-  // Diverging vertical bars share one scale: the plot spans maxPos above the
-  // zero baseline and maxNeg below it.
-  let maxPos = 0;
-  let maxNeg = 0;
-  for (const r of rows) {
-    for (const v of [r.portfolio, r.spy]) {
-      if (v == null) continue;
-      maxPos = Math.max(maxPos, v);
-      maxNeg = Math.max(maxNeg, -v);
-    }
+  const points = cumulative(rows);
+
+  // Both lines share one y-scale that always includes the zero baseline.
+  let minV = 0;
+  let maxV = 0;
+  for (const p of points) {
+    minV = Math.min(minV, p.portfolio, p.spy);
+    maxV = Math.max(maxV, p.portfolio, p.spy);
   }
-  const span = maxPos + maxNeg;
-  const posFrac = span > 0 ? maxPos / span : 1;
+  if (maxV - minV < 1e-6) {
+    minV -= 1;
+    maxV += 1;
+  }
+  const pad = (maxV - minV) * 0.08;
+  const lo = minV - pad;
+  const hi = maxV + pad;
+  const ticks = niceTicks(lo, hi);
+  const yPct = (v: number) => ((hi - v) / (hi - lo)) * 100;
+  const xPct = (month: number) => ((month + 0.5) / 12) * 100;
+
+  // Each line starts at 0% on the left edge of the first active month.
+  const linePoints = (pick: (p: CumPoint) => number) =>
+    points.length === 0
+      ? ""
+      : [
+          `${(points[0].month / 12) * 100},${yPct(0)}`,
+          ...points.map((p) => `${xPct(p.month)},${yPct(pick(p))}`),
+        ].join(" ");
 
   const isLoading = pnlQuery.isLoading || spyQuery.isLoading;
   const queryError = pnlQuery.error ?? spyQuery.error;
@@ -245,53 +331,139 @@ export function YearlyVsSpy() {
         <p className="text-sm text-gray-500">No trade history yet.</p>
       ) : (
         <div className="relative mt-6">
-          {/* Zero baseline across the whole plot. */}
-          <div
-            className="absolute inset-x-0 z-0 h-px bg-gray-700"
-            style={{ top: `calc(${posFrac} * 11rem)` }}
-          />
-          <div className="flex items-start gap-1.5">
+          <div className="relative h-44">
+            {/* Horizontal gridlines with % labels; zero baseline emphasized. */}
+            {ticks.map((t) => (
+              <div key={t}>
+                <div
+                  className={`absolute inset-x-0 h-px ${
+                    t === 0 ? "bg-gray-700" : "bg-gray-800/70"
+                  }`}
+                  style={{ top: `${yPct(t)}%` }}
+                />
+                <span
+                  className="absolute left-0 -translate-y-full pb-0.5 text-[10px] tabular-nums text-gray-500"
+                  style={{ top: `${yPct(t)}%` }}
+                >
+                  {t > 0 ? `+${t}%` : `${t}%`}
+                </span>
+              </div>
+            ))}
+            <svg
+              className="absolute inset-0 h-full w-full"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              {[
+                { pts: linePoints((p) => p.spy), color: SPY_COLOR },
+                { pts: linePoints((p) => p.portfolio), color: PORTFOLIO_COLOR },
+              ].map(({ pts, color }) => (
+                <polyline
+                  key={color}
+                  points={pts}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </svg>
+            {/* Hover layer: one hit column per month with crosshair + markers. */}
+            <div className="absolute inset-0 flex">
+              {rows.map((r) => {
+                const p = points.find((c) => c.month === r.month);
+                return (
+                  <div key={r.month} className="group relative min-w-0 flex-1">
+                    {p && (
+                      <>
+                        <div className="absolute inset-y-0 left-1/2 w-px bg-gray-700 opacity-0 transition-opacity group-hover:opacity-100" />
+                        {[
+                          { value: p.spy, color: SPY_COLOR },
+                          { value: p.portfolio, color: PORTFOLIO_COLOR },
+                        ].map(({ value, color }) => (
+                          <div
+                            key={color}
+                            className="absolute left-1/2 z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                            style={{
+                              top: `${yPct(value)}%`,
+                              background: color,
+                              boxShadow: "0 0 0 2px #0b0e11",
+                            }}
+                          />
+                        ))}
+                        <div
+                          className={`pointer-events-none absolute -top-1.5 z-20 -translate-y-full whitespace-nowrap rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                            r.month < 2
+                              ? "left-0"
+                              : r.month > 9
+                                ? "right-0"
+                                : "left-1/2 -translate-x-1/2"
+                          }`}
+                        >
+                          <div className="font-medium text-gray-100">
+                            {MONTH_LABELS[p.month]} {year}
+                          </div>
+                          {[
+                            {
+                              name: "Portfolio",
+                              color: PORTFOLIO_COLOR,
+                              ytd: p.portfolio,
+                              mo: p.monthPortfolio,
+                            },
+                            { name: "SPY", color: SPY_COLOR, ytd: p.spy, mo: p.monthSpy },
+                          ].map((s) => (
+                            <div key={s.name} className="mt-0.5 flex items-center gap-1.5">
+                              <span
+                                className="inline-block h-2 w-2 rounded-full"
+                                style={{ background: s.color }}
+                              />
+                              <span className="text-gray-400">{s.name}</span>
+                              <span className={`tabular-nums ${pnlColor(s.ytd)}`}>
+                                {fmtPct(s.ytd)} <span className="text-gray-500">ysf</span>
+                              </span>
+                              <span className="tabular-nums text-gray-500">
+                                ({fmtPct(s.mo)} mo)
+                              </span>
+                            </div>
+                          ))}
+                          {p.symbols.length > 0 && (
+                            <div
+                              className="mt-1.5 grid gap-x-4 gap-y-0.5 border-t border-gray-800 pt-1.5"
+                              style={{
+                                gridAutoFlow: "column",
+                                gridTemplateRows: `repeat(${Math.min(6, p.symbols.length)}, auto)`,
+                              }}
+                            >
+                              {p.symbols.map((s) => (
+                                <div
+                                  key={s.symbol}
+                                  className="flex items-center justify-between gap-3"
+                                >
+                                  <span className="text-gray-400">{s.symbol}</span>
+                                  <span className={`tabular-nums ${pnlColor(s.pnl)}`}>
+                                    {fmtMoney(s.pnl)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mt-1 flex">
             {rows.map((r) => (
-              <div key={r.month} className="group relative min-w-0 flex-1">
-                <div className="pointer-events-none absolute -top-1.5 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                  <span className="font-medium text-gray-100">
-                    {MONTH_LABELS[r.month]} {year}
-                  </span>{" "}
-                  <span className="text-gray-400">Portfolio</span>{" "}
-                  <span className={`tabular-nums ${pnlColor(r.portfolio)}`}>
-                    {fmtPct(r.portfolio)}
-                  </span>{" "}
-                  <span className="text-gray-400">SPY</span>{" "}
-                  <span className={`tabular-nums ${pnlColor(r.spy)}`}>{fmtPct(r.spy)}</span>
-                </div>
-                <div className="relative h-44">
-                  {[
-                    { value: r.portfolio, color: PORTFOLIO_COLOR, left: "35%" },
-                    { value: r.spy, color: SPY_COLOR, left: "65%" },
-                  ].map(({ value, color, left }) =>
-                    value == null ? null : (
-                      <div
-                        key={left}
-                        className={`absolute -translate-x-1/2 ${
-                          value >= 0 ? "rounded-t" : "rounded-b"
-                        } opacity-80 transition-opacity group-hover:opacity-100`}
-                        style={{
-                          left,
-                          width: "min(0.75rem, 40%)",
-                          minHeight: 2,
-                          height: `${span > 0 ? (Math.abs(value) / span) * 100 : 0}%`,
-                          background: color,
-                          ...(value >= 0
-                            ? { bottom: `${(1 - posFrac) * 100}%` }
-                            : { top: `${posFrac * 100}%` }),
-                        }}
-                      />
-                    ),
-                  )}
-                </div>
-                <div className="mt-1 truncate text-center text-[10px] text-gray-400">
-                  {MONTH_LABELS[r.month]}
-                </div>
+              <div
+                key={r.month}
+                className="min-w-0 flex-1 truncate text-center text-[10px] text-gray-400"
+              >
+                {MONTH_LABELS[r.month]}
               </div>
             ))}
           </div>
