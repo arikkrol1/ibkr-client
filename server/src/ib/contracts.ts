@@ -1,5 +1,6 @@
 import { Stock, type Contract, type ContractDescription } from "@stoqey/ib";
 import { ib } from "./connection.js";
+import { ibCall } from "./ibCall.js";
 import { getStorage } from "../storage/storage.js";
 
 export interface SymbolMatch {
@@ -13,7 +14,11 @@ export interface SymbolMatch {
 
 /** Free-text symbol lookup via reqMatchingSymbols. */
 export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
-  const descriptions: ContractDescription[] = await ib.api.getMatchingSymbols(query);
+  const descriptions: ContractDescription[] = await ibCall(
+    `getMatchingSymbols "${query}"`,
+    10_000,
+    () => ib.api.getMatchingSymbols(query),
+  );
   return descriptions
     .map((d) => d.contract)
     .filter((c): c is Contract => Boolean(c))
@@ -79,7 +84,11 @@ export async function getSymbolInfo(params: {
   const cached = await store.getMeta(cacheKey);
   if (cached) return JSON.parse(cached) as SymbolInfo;
 
-  const details = await ib.api.getContractDetails(contract);
+  const details = await ibCall(
+    `getContractDetails ${contract.conId ?? contract.symbol}`,
+    15_000,
+    () => ib.api.getContractDetails(contract),
+  );
   const d = details[0];
   if (!d) throw new Error("No contract details found");
   const info: SymbolInfo = {

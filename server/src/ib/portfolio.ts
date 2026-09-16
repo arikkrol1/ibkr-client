@@ -1,6 +1,7 @@
 import { firstValueFrom, timeout, filter } from "rxjs";
 import type { Observable } from "rxjs";
 import { ib } from "./connection.js";
+import { ibCall } from "./ibCall.js";
 
 export interface PortfolioPosition {
   conId?: number;
@@ -70,30 +71,34 @@ function sumAbsMarketValue(
 }
 
 export async function getPortfolio(): Promise<PortfolioSnapshot> {
-  const accounts = await ib.api.getManagedAccounts();
+  const accounts = await ibCall("getManagedAccounts", 10_000, () =>
+    ib.api.getManagedAccounts(),
+  );
   const account = accounts[0] ?? null;
 
   // reqAccountUpdates: positions (with market value + PnL) AND balance values.
   // Tags stream in incrementally (AccountCode first, NetLiquidation & co. later),
   // so don't settle on the first emission — wait until a real balance tag has
   // landed for the account, otherwise balances come back empty.
-  const update = await firstReady(
-    ib.api.getAccountUpdates(account ?? undefined),
-    (u) => {
-      const all = u.all?.value;
-      if (!all) return false;
-      const vals = account ? all.get(account) : [...all.values()][0];
-      // Balances aren't ready until NetLiquidation has streamed in.
-      if (!vals?.get("NetLiquidation")) return false;
-      // Positions also stream in one row at a time and lag the balance tags.
-      // GrossPositionValue is the account's total |market value| of holdings, so
-      // wait until the rows we've collected cover it (within a small tolerance
-      // for live price drift) — otherwise we'd return a partial position list.
-      const gross = numTag(vals, "GrossPositionValue") ?? 0;
-      if (gross <= 0) return true; // no holdings — nothing to wait for
-      return sumAbsMarketValue(u.all?.portfolio) >= gross * 0.98;
-    },
-    10_000,
+  const update = await ibCall(`getAccountUpdates ${account ?? "default"}`, 12_000, () =>
+    firstReady(
+      ib.api.getAccountUpdates(account ?? undefined),
+      (u) => {
+        const all = u.all?.value;
+        if (!all) return false;
+        const vals = account ? all.get(account) : [...all.values()][0];
+        // Balances aren't ready until NetLiquidation has streamed in.
+        if (!vals?.get("NetLiquidation")) return false;
+        // Positions also stream in one row at a time and lag the balance tags.
+        // GrossPositionValue is the account's total |market value| of holdings, so
+        // wait until the rows we've collected cover it (within a small tolerance
+        // for live price drift) — otherwise we'd return a partial position list.
+        const gross = numTag(vals, "GrossPositionValue") ?? 0;
+        if (gross <= 0) return true; // no holdings — nothing to wait for
+        return sumAbsMarketValue(u.all?.portfolio) >= gross * 0.98;
+      },
+      10_000,
+    ),
   );
 
   const positions: PortfolioPosition[] = [];
@@ -133,10 +138,12 @@ export async function getPortfolio(): Promise<PortfolioSnapshot> {
   let dailyPnL: number | undefined;
   if (account) {
     try {
-      const pnl = await firstReady(
-        ib.api.getPnL(account),
-        (p) => p.dailyPnL != null,
-        6_000,
+      const pnl = await ibCall(`getPnL ${account}`, 8_000, () =>
+        firstReady(
+          ib.api.getPnL(account),
+          (p) => p.dailyPnL != null,
+          6_000,
+        ),
       );
       dailyPnL = pnl.dailyPnL;
     } catch {

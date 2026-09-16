@@ -312,7 +312,13 @@ export async function getPnlHistory(days: number): Promise<PnlHistory> {
   }
   const cached = responseCache.get(days);
   if (cached && performance.now() - cached.fetchedAt < PNL_TTL_MS) return cached.data;
+  const started = performance.now();
+  console.log(`[pnl] computing history days=${days}`);
   const data = await flexHistory(days);
+  console.log(
+    `[pnl] history ready days=${days}: ${data.series.length} series, ` +
+      `${data.errors.length} errors (${Math.round(performance.now() - started)}ms)`,
+  );
   responseCache.set(days, { data, fetchedAt: performance.now() });
   return data;
 }

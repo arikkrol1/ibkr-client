@@ -102,10 +102,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const FLEX_HTTP_TIMEOUT_MS = 30_000;
+
 async function fetchText(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { "User-Agent": "ibkr-client" } });
-  if (!res.ok) throw new Error(`Flex service HTTP ${res.status}`);
-  return res.text();
+  const label = url.replace(/([?&]t=)[^&]+/, "$1***");
+  const started = performance.now();
+  console.log(`[flex →] GET ${label}`);
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "ibkr-client" },
+      signal: AbortSignal.timeout(FLEX_HTTP_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`Flex service HTTP ${res.status}`);
+    const text = await res.text();
+    console.log(
+      `[flex ✓] GET ${label} (${text.length} chars, ${Math.round(performance.now() - started)}ms)`,
+    );
+    return text;
+  } catch (err) {
+    console.warn(
+      `[flex ✗] GET ${label} (${Math.round(performance.now() - started)}ms): ` +
+        `${err instanceof Error ? err.message : err}`,
+    );
+    throw err;
+  }
 }
 
 /** Parse Flex dateTime formats: "yyyyMMdd;HHmmss", "yyyy-MM-dd;HH:mm:ss", "yyyyMMdd". */

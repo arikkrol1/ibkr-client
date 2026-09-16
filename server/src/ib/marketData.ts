@@ -7,6 +7,7 @@ import {
 } from "@stoqey/ib";
 import { Observable } from "rxjs";
 import { ib } from "./connection.js";
+import { ibCall, withHistorySlot } from "./ibCall.js";
 import { getStorage } from "../storage/storage.js";
 
 /**
@@ -83,15 +84,24 @@ function barTime(raw: string | number): number {
   return Number(raw);
 }
 
+/** How long to wait for IB before failing a historical request. */
+const HISTORY_TIMEOUT_MS = 30_000;
+const HEAD_TIME_TIMEOUT_MS = 15_000;
+
 async function requestBars(p: HistoryParams): Promise<HistoryBar[]> {
-  const raw: Bar[] = await ib.api.getHistoricalData(
-    p.contract,
-    "", // endDateTime "" = now
-    p.duration,
-    p.barSize as BarSizeSetting,
-    WhatToShow.TRADES,
-    p.useRTH ? 1 : 0,
-    2, // formatDate=2 → epoch seconds
+  const label = `getHistoricalData ${contractKeyOf(p.contract)} ${p.barSize}/${p.duration}`;
+  const raw: Bar[] = await withHistorySlot(label, () =>
+    ibCall(label, HISTORY_TIMEOUT_MS, () =>
+      ib.api.getHistoricalData(
+        p.contract,
+        "", // endDateTime "" = now
+        p.duration,
+        p.barSize as BarSizeSetting,
+        WhatToShow.TRADES,
+        p.useRTH ? 1 : 0,
+        2, // formatDate=2 → epoch seconds
+      ),
+    ),
   );
   return raw
     .filter((b) => b.time != null && b.close != null)
@@ -127,7 +137,12 @@ async function getHeadTime(contract: Contract, useRTH: boolean): Promise<number 
   const cached = headTimeCache.get(key);
   if (cached != null) return cached;
   try {
-    const raw = await ib.api.getHeadTimestamp(contract, WhatToShow.TRADES, useRTH, 2);
+    const label = `getHeadTimestamp ${contractKeyOf(contract)}`;
+    const raw = await withHistorySlot(label, () =>
+      ibCall(label, HEAD_TIME_TIMEOUT_MS, () =>
+        ib.api.getHeadTimestamp(contract, WhatToShow.TRADES, useRTH, 2),
+      ),
+    );
     const t = parseIbTime(raw);
     if (t != null) headTimeCache.set(key, t);
     return t;
@@ -199,7 +214,22 @@ async function getDailyHistory(p: HistoryParams): Promise<HistoryBar[]> {
     return store.getDailyBars(key, fromTime);
   }
 
-  const bars = await fetchFromIb(p);
+  let bars: HistoryBar[];
+  try {
+    bars = await fetchFromIb(p);
+  } catch (err) {
+    // IB unavailable (timeout, pacing lockout, farm outage) — stale stored
+    // bars beat an error for immutable daily history.
+    const stale = await store.getDailyBars(key, fromTime);
+    if (stale.length > 0) {
+      console.warn(
+        `[ib] serving ${stale.length} stored daily bars for ${key} after fetch failure: ` +
+          `${err instanceof Error ? err.message : err}`,
+      );
+      return stale;
+    }
+    throw err;
+  }
   if (bars.length > 0) {
     // Split-safety: IB rewrites history on stock splits. If the fresh fetch
     // disagrees with stored closes on overlapping days, rebuild the contract.
