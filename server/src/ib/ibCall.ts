@@ -74,9 +74,15 @@ function drainPending(): void {
 }
 
 function acquireHistorySlot(label: string): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const queuedAt = Date.now();
     pending.push(() => {
+      // Flush queued waiters as soon as the circuit opens — they'd only be
+      // sent to an IB that isn't answering.
+      if (historyCircuitOpen()) {
+        reject(circuitOpenError(label));
+        return true;
+      }
       const now = Date.now();
       while (starts.length > 0 && now - starts[0] > HIST_WINDOW_MS) starts.shift();
       if (running >= HIST_MAX_CONCURRENT || starts.length >= HIST_WINDOW_MAX) {
@@ -119,16 +125,21 @@ function historyCircuitOpen(): boolean {
   );
 }
 
+function circuitOpenError(label: string): Error {
+  const retryIn = Math.ceil((CIRCUIT_COOLOFF_MS - (Date.now() - lastTimeoutAt)) / 1000);
+  return new Error(
+    `${label}: skipped — IB historical data unresponsive (retrying in ~${retryIn}s)`,
+  );
+}
+
 /** Run a historical-data request under the pacing limiter + circuit breaker. */
 export async function withHistorySlot<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  if (historyCircuitOpen()) {
-    const retryIn = Math.ceil((CIRCUIT_COOLOFF_MS - (Date.now() - lastTimeoutAt)) / 1000);
-    throw new Error(
-      `${label}: skipped — IB historical data unresponsive (retrying in ~${retryIn}s)`,
-    );
-  }
+  if (historyCircuitOpen()) throw circuitOpenError(label);
   await acquireHistorySlot(label);
   try {
+    // Re-check: the circuit may have opened while this request was queued
+    // for a slot — sending now would burn another full timeout on dead IB.
+    if (historyCircuitOpen()) throw circuitOpenError(label);
     const result = await fn();
     if (consecutiveTimeouts >= CIRCUIT_OPEN_AFTER) {
       console.log("[ib] historical data responding again — circuit closed");
