@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type PnlSeries } from "../api";
 import { PnlChart } from "../components/PnlChart";
 import { PnlPctChart } from "../components/PnlPctChart";
@@ -45,11 +45,15 @@ export function PnLPage() {
   // has data regardless of the line chart's selected range; the line chart
   // slices client-side, which also makes range switching instant.
   const fetchDays = Math.max(days, 370);
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["pnl", fetchDays],
     queryFn: () => api.pnl(fetchDays),
-    refetchInterval: 60_000,
+    // Keep showing the previous result while a fetch is in the air (range
+    // switches, polls); poll faster while the server is recomputing.
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => (query.state.data?.refreshing ? 5_000 : 60_000),
   });
+  const backgroundRefreshing = Boolean(data) && (isFetching || Boolean(data?.refreshing));
 
   // Stable color per series key (server returns series alphabetically).
   const colorMap = useMemo(() => {
@@ -84,8 +88,10 @@ export function PnLPage() {
       return next;
     });
 
+  // Block the page only when there is nothing to show yet — any later fetch
+  // (range switch, poll, server recompute) renders the ribbon instead.
   if (isLoading) return <Centered>Computing P&L history…</Centered>;
-  if (isError) return <Centered tone="error">{(error as Error).message}</Centered>;
+  if (isError && !data) return <Centered tone="error">{(error as Error).message}</Centered>;
   if (!data) return null;
 
   const visibleTotal = filteredSeries
@@ -103,6 +109,17 @@ export function PnLPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
+      {backgroundRefreshing && (
+        <div className="flex items-center gap-2 rounded-md border border-sky-800/60 bg-sky-900/30 px-3 py-1.5 text-xs text-sky-300">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+          Refreshing P&L data in the background — showing last computed results.
+        </div>
+      )}
+      {isError && (
+        <div className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-300">
+          Background refresh failed: {(error as Error).message}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">P&L</h1>

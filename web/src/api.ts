@@ -107,6 +107,8 @@ export interface PnlHistory {
   errors: { symbol: string; message: string }[];
   /** Epoch ms of the last successful trade-history fetch. */
   tradesAsOf?: number;
+  /** True when this is a stale response and the server is recomputing in the background. */
+  refreshing?: boolean;
 }
 
 async function getJSON<T>(url: string): Promise<T> {

@@ -32,6 +32,8 @@ export interface PnlHistory {
   errors: { symbol: string; message: string }[];
   /** Epoch ms of the last successful Flex fetch backing this data. */
   tradesAsOf?: number;
+  /** True when this is a stale response and a recompute is running in the background. */
+  refreshing?: boolean;
 }
 
 const DAY = 86_400;
@@ -312,13 +314,37 @@ export async function getPnlHistory(days: number): Promise<PnlHistory> {
   }
   const cached = responseCache.get(days);
   if (cached && performance.now() - cached.fetchedAt < PNL_TTL_MS) return cached.data;
-  const started = performance.now();
-  console.log(`[pnl] computing history days=${days}`);
-  const data = await flexHistory(days);
-  console.log(
-    `[pnl] history ready days=${days}: ${data.series.length} series, ` +
-      `${data.errors.length} errors (${Math.round(performance.now() - started)}ms)`,
-  );
-  responseCache.set(days, { data, fetchedAt: performance.now() });
-  return data;
+  if (cached) {
+    // Stale-while-revalidate: serve the previous result immediately and
+    // recompute in the background so the P&L tab never blocks on IB.
+    computeAndCache(days).catch((err) =>
+      console.warn(
+        `[pnl] background refresh failed days=${days}: ` +
+          `${err instanceof Error ? err.message : err}`,
+      ),
+    );
+    return { ...cached.data, refreshing: true };
+  }
+  // Nothing to serve yet (first request after startup) — must compute inline.
+  return computeAndCache(days);
+}
+
+const inFlightCompute = new Map<number, Promise<PnlHistory>>();
+
+function computeAndCache(days: number): Promise<PnlHistory> {
+  const existing = inFlightCompute.get(days);
+  if (existing) return existing;
+  const promise = (async () => {
+    const started = performance.now();
+    console.log(`[pnl] computing history days=${days}`);
+    const data = await flexHistory(days);
+    console.log(
+      `[pnl] history ready days=${days}: ${data.series.length} series, ` +
+        `${data.errors.length} errors (${Math.round(performance.now() - started)}ms)`,
+    );
+    responseCache.set(days, { data, fetchedAt: performance.now() });
+    return data;
+  })().finally(() => inFlightCompute.delete(days));
+  inFlightCompute.set(days, promise);
+  return promise;
 }
