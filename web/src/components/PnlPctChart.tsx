@@ -12,8 +12,10 @@ const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDat
 
 const TIMEFRAMES: Timeframe[] = [
   { key: "year", label: "Year", start: (n) => new Date(n.getFullYear() - 1, n.getMonth(), n.getDate()) },
+  { key: "quarter", label: "3M", start: (n) => new Date(n.getFullYear(), n.getMonth() - 3, n.getDate()) },
   { key: "month", label: "Month", start: (n) => new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()) },
   { key: "week", label: "Week", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 7) },
+  { key: "day", label: "Day", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 1) },
   { key: "ytd", label: "YTD", start: (n) => new Date(n.getFullYear(), 0, 1) },
   { key: "mtd", label: "MTD", start: (n) => new Date(n.getFullYear(), n.getMonth(), 1) },
   {

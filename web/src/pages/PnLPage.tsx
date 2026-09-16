@@ -9,6 +9,8 @@ import { fmtMoney, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 
 const RANGES = [
+  { label: "1D", days: 1 },
+  { label: "1W", days: 7 },
   { label: "1M", days: 30 },
   { label: "3M", days: 90 },
   { label: "6M", days: 180 },
@@ -72,11 +74,31 @@ export function PnLPage() {
   // Line-chart view of the selected range.
   const chartSeries = useMemo(() => {
     if (!data) return [];
-    const cutoff = Date.now() / 1000 - days * 86_400;
-    return data.series.filter(matchesStatus).map((s) => ({
-      ...s,
-      points: s.points.filter((p) => p.time >= cutoff),
-    }));
+    const nowSec = Date.now() / 1000;
+    const cutoff = nowSec - days * 86_400;
+    return data.series.filter(matchesStatus).map((s) => {
+      // Include one point before the window as the baseline so short ranges
+      // (1D) still draw a segment. Points are daily closes, so over a weekend
+      // nothing lands inside the window — fall back to the last two points,
+      // but only for series still active; long-closed ones stay off-chart.
+      const firstIdx = s.points.findIndex((p) => p.time >= cutoff);
+      const lastTime = s.points[s.points.length - 1]?.time ?? 0;
+      let points: typeof s.points;
+      if (firstIdx > 0) {
+        // Carry the pre-window value in as a baseline, clamped to the window
+        // edge so a months-old point (sparse flat series) can't stretch the axis.
+        const prev = s.points[firstIdx - 1];
+        points = [
+          { ...prev, time: Math.max(prev.time, Math.floor(cutoff)) },
+          ...s.points.slice(firstIdx),
+        ];
+      } else if (firstIdx === 0) {
+        points = s.points;
+      } else {
+        points = nowSec - lastTime < 4 * 86_400 ? s.points.slice(-2) : [];
+      }
+      return { ...s, points };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, days, statusFilter]);
 

@@ -5,11 +5,15 @@ import { MiniAreaChart } from "../components/MiniAreaChart";
 import { fmtMoney, fmtPct, pnlColor } from "../utils/format";
 
 const RANGES = [
-  { label: "1M", duration: "1 M" },
-  { label: "3M", duration: "3 M" },
-  { label: "6M", duration: "6 M" },
-  { label: "1Y", duration: "1 Y" },
+  { label: "1D", barSize: "5 mins", duration: "1 D" },
+  { label: "1W", barSize: "30 mins", duration: "1 W" },
+  { label: "1M", barSize: "1 day", duration: "1 M" },
+  { label: "3M", barSize: "1 day", duration: "3 M" },
+  { label: "6M", barSize: "1 day", duration: "6 M" },
+  { label: "1Y", barSize: "1 day", duration: "1 Y" },
 ] as const;
+
+type Range = (typeof RANGES)[number];
 
 interface Instrument {
   symbol: string;
@@ -35,7 +39,7 @@ const SECTORS: Instrument[] = [
 ];
 
 export function SectorsPage() {
-  const [rangeIdx, setRangeIdx] = useState(2); // 6M
+  const [rangeIdx, setRangeIdx] = useState(4); // 6M
   const range = RANGES[rangeIdx];
 
   return (
@@ -61,8 +65,8 @@ export function SectorsPage() {
         </div>
       </div>
 
-      <Section title="Indexes" instruments={INDEXES} duration={range.duration} />
-      <Section title="Sectors" instruments={SECTORS} duration={range.duration} />
+      <Section title="Indexes" instruments={INDEXES} range={range} />
+      <Section title="Sectors" instruments={SECTORS} range={range} />
     </div>
   );
 }
@@ -70,11 +74,11 @@ export function SectorsPage() {
 function Section({
   title,
   instruments,
-  duration,
+  range,
 }: {
   title: string;
   instruments: Instrument[];
-  duration: string;
+  range: Range;
 }) {
   return (
     <section>
@@ -83,7 +87,7 @@ function Section({
       </h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {instruments.map((inst) => (
-          <SectorCard key={inst.symbol} instrument={inst} duration={duration} />
+          <SectorCard key={inst.symbol} instrument={inst} range={range} />
         ))}
       </div>
     </section>
@@ -92,15 +96,19 @@ function Section({
 
 function SectorCard({
   instrument,
-  duration,
+  range,
 }: {
   instrument: Instrument;
-  duration: string;
+  range: Range;
 }) {
   const history = useQuery({
-    queryKey: ["sector-history", instrument.symbol, duration],
+    queryKey: ["sector-history", instrument.symbol, range.label],
     queryFn: () =>
-      api.history({ symbol: instrument.symbol, barSize: "1 day", duration }),
+      api.history({
+        symbol: instrument.symbol,
+        barSize: range.barSize,
+        duration: range.duration,
+      }),
     staleTime: 5 * 60_000,
   });
 

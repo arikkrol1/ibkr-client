@@ -27,6 +27,7 @@ export function MiniAreaChart({ bars, up, height = 140 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const intradayRef = useRef(false);
   const [tip, setTip] = useState<{ x: number; date: string; price: number } | null>(null);
 
   useEffect(() => {
@@ -66,11 +67,15 @@ export function MiniAreaChart({ bars, up, height = 140 }: Props) {
         setTip(null);
         return;
       }
-      const date = new Date((param.time as number) * 1000).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
+      const t = new Date((param.time as number) * 1000);
+      const date = intradayRef.current
+        ? t.toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
       setTip({ x: param.point.x, date, price: data.value });
     });
 
@@ -95,6 +100,7 @@ export function MiniAreaChart({ bars, up, height = 140 }: Props) {
       crosshairMarkerBorderColor: colors.line,
       crosshairMarkerBackgroundColor: colors.line,
     });
+    intradayRef.current = bars.length > 1 && bars[1].time - bars[0].time < 86_400;
     series.setData(
       bars.map<AreaData>((b) => ({ time: b.time as UTCTimestamp, value: b.close })),
     );
