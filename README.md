@@ -18,6 +18,11 @@ IB Gateway (127.0.0.1:4001) ──socket──> Node/Fastify backend ──REST+
 Everything runs on your own machine. The app only ever talks to your local IB
 Gateway/TWS and the IBKR Flex web service — no third-party servers, no telemetry.
 
+![Dashboard](docs/screenshots/dashboard.png)
+
+> Screenshots throughout this README use **synthetic demo data** — not a real
+> account.
+
 ---
 
 ## Prerequisites
@@ -105,21 +110,27 @@ Open **http://127.0.0.1:5173** (dev) or **http://127.0.0.1:4010** (prod).
 
 ## 3. Configuration (env vars)
 
-Create `server/.env` (git-ignored) to override any of these:
+Every variable has a sensible default, so a stock local IB Gateway setup needs
+**none** of them — create `server/.env` (git-ignored) only to override. The
+**Required?** column flags the cases where you *would* need to set one.
 
-| Var | Default | Meaning |
-|-----|---------|---------|
-| `PORT` | `4010` | Backend HTTP/WS port |
-| `IB_HOST` | `127.0.0.1` | Gateway/TWS host |
-| `IB_PORT` | `4001` | 4001/4002 (Gateway live/paper), 7496/7497 (TWS live/paper) |
-| `IB_CLIENT_ID` | `10` | API client id |
-| `IB_MARKET_DATA_TYPE` | `1` | 1=realtime, 3=delayed, 2/4=frozen variants |
-| `IB_RECONNECT_MS` | `5000` | Auto-reconnect interval |
-| `IB_FLEX_TOKEN` | *(empty)* | Flex Web Service token (enables full P&L history) |
-| `IB_FLEX_QUERY_ID` | *(empty)* | Flex query id(s); comma-separated for multiple year ranges |
-| `IB_FLEX_REFRESH_HOURS` | `12` | Hours stored trades stay fresh before re-fetch |
-| `DB_DRIVER` | `sqlite` | Storage driver (only `sqlite` today) |
-| `DB_SQLITE_PATH` | `server/.data/ibkr.sqlite` | SQLite file location |
+| Var | Required? | Default | Meaning |
+|-----|-----------|---------|---------|
+| `PORT` | Optional | `4010` | Backend HTTP/WS port |
+| `IB_HOST` | Optional | `127.0.0.1` | Gateway/TWS host |
+| `IB_PORT` | **Set for TWS / paper** | `4001` | 4001/4002 (Gateway live/paper), 7496/7497 (TWS live/paper) |
+| `IB_CLIENT_ID` | Optional | `10` | API client id |
+| `IB_MARKET_DATA_TYPE` | **Set to `3` if no realtime sub** | `1` | 1=realtime, 3=delayed, 2/4=frozen variants |
+| `IB_RECONNECT_MS` | Optional | `5000` | Auto-reconnect interval |
+| `IB_FLEX_TOKEN` | **Required for full P&L history** | *(empty)* | Flex Web Service token |
+| `IB_FLEX_QUERY_ID` | **Required for full P&L history** | *(empty)* | Flex query id(s); comma-separated for multiple year ranges |
+| `IB_FLEX_REFRESH_HOURS` | Optional | `12` | Hours stored trades stay fresh before re-fetch |
+| `DB_DRIVER` | Optional | `sqlite` | Storage driver (only `sqlite` today) |
+| `DB_SQLITE_PATH` | Optional | `server/.data/ibkr.sqlite` | SQLite file location |
+
+> `IB_FLEX_TOKEN` and `IB_FLEX_QUERY_ID` are required **together** — set both to
+> enable the P&L tab's full trade history, or neither to fall back to a
+> positions-only approximation.
 
 ---
 
@@ -129,6 +140,9 @@ The app is a single dark dashboard with five tabs (top nav). Prices/charts badge
 as **DELAYED** when the account lacks a realtime subscription.
 
 ### Dashboard (`/`)
+
+*(pictured at the top of this README)*
+
 A live snapshot of the account, polling every 10 seconds.
 - **Summary cards:** Net Liquidation, Cash, Buying Power, Positions Value, Day
   P&L, Unrealized P&L.
@@ -140,6 +154,9 @@ A live snapshot of the account, polling every 10 seconds.
   Week / Month / Year / WTD / MTD / YTD timeframes.
 
 ### P&L (`/pnl`)
+
+![P&L tab](docs/screenshots/pnl.png)
+
 Realized **and** unrealized P&L over time, built from your full trade history
 (best with Flex configured — see above).
 - **Header:** total P&L for the visible selection, a *Trades as of* timestamp,
@@ -156,6 +173,9 @@ Realized **and** unrealized P&L over time, built from your full trade history
   like-for-like over the months the account was active.
 
 ### Compare (`/compare`)
+
+![Compare tab](docs/screenshots/compare.png)
+
 Overlay multiple symbols on one chart over a shared timeframe.
 - **Modes:** **% Change** (rebased to the window start) or raw **Price**.
 - **Timeframes:** Week / Month / Year / 5Y / 10Y / Max, plus WTD / MTD / YTD.
@@ -166,6 +186,9 @@ Overlay multiple symbols on one chart over a shared timeframe.
 - **Legend:** click a chip to hide/show a series, `×` to remove it.
 
 ### Charts (`/chart`)
+
+![Charts tab](docs/screenshots/charts.png)
+
 A single-symbol candlestick chart with a live quote header.
 - **Search** any ticker to load it.
 - **Quote header:** last price, change and % change, bid / ask / high / low, and
@@ -174,6 +197,9 @@ A single-symbol candlestick chart with a live quote header.
   range).
 
 ### Sectors (`/sectors`)
+
+![Sectors tab](docs/screenshots/sectors.png)
+
 A grid of ETF-proxy mini-charts for a quick market read.
 - **Indexes:** SPY, QQQ, DIA, IWM.
 - **Sectors:** semiconductors, aerospace & defense, space, quantum, technology,

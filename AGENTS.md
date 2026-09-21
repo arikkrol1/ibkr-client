@@ -23,6 +23,9 @@ Update the matching part of `README.md`:
 - **§3 Configuration** — the env-var table.
 - **§5 API surface** — when routes change (`server/src/routes/*`).
 - **Prerequisites / §1–2** — when setup or run steps change.
+- **`docs/screenshots/`** — when a tab's appearance changes noticeably, refresh
+  its screenshot (synthetic demo data only — never a real account). See
+  `docs/screenshots/README.md`.
 
 Treat a UI change with no README update as incomplete. If a change makes a
 screenshot or description in the README wrong, fix it in the same commit.

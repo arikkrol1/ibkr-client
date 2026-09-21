@@ -11,6 +11,8 @@ Guidance for Claude Code in this repo. The full agent guide is in `AGENTS.md`:
 If you add/rename a tab, change a view/chart/table, alter a control (timeframe,
 filter, toggle, mode), or add/change an env var or run command, update the
 matching section of `README.md` (§4 tabs & views, §3 config, §5 API surface)
-before considering the task done. See `AGENTS.md` for the full checklist.
+before considering the task done. If a tab's look changes noticeably, refresh
+its `docs/screenshots/*.png` (synthetic demo data only). See `AGENTS.md` for the
+full checklist.
 
 This client is **read-only** — never add order-placing capability.
