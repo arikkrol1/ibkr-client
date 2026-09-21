@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type SymbolMatch } from "../api";
 import { SymbolSearch } from "../components/SymbolSearch";
 import { PriceChart } from "../components/PriceChart";
+import { RecentCharts, recentKey } from "../components/RecentCharts";
 import { useQuote } from "../hooks/useQuote";
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from "../utils/format";
 
@@ -13,12 +14,27 @@ const PRESETS = [
   { label: "6M", barSize: "1 day", duration: "6 M" },
   { label: "1Y", barSize: "1 day", duration: "1 Y" },
   { label: "5Y", barSize: "1 week", duration: "5 Y" },
+  { label: "10Y", barSize: "1 week", duration: "10 Y" },
 ] as const;
+
+const MAX_RECENTS = 10;
 
 export function ChartPage() {
   const [selected, setSelected] = useState<SymbolMatch | null>(null);
   const [presetIdx, setPresetIdx] = useState(3); // 6M
   const preset = PRESETS[presetIdx];
+
+  // Keep the last N inspected symbols, newest first, deduped by identity.
+  const [recents, setRecents] = useState<SymbolMatch[]>([]);
+  useEffect(() => {
+    if (!selected?.symbol) return;
+    setRecents((prev) => {
+      const key = recentKey(selected);
+      const next = prev.filter((m) => recentKey(m) !== key);
+      next.unshift(selected);
+      return next.slice(0, MAX_RECENTS);
+    });
+  }, [selected]);
 
   const symbol = selected?.symbol ?? null;
   const quote = useQuote(symbol);
@@ -121,6 +137,12 @@ export function ChartPage() {
           )}
         </div>
       )}
+
+      <RecentCharts
+        items={recents}
+        activeKey={selected ? recentKey(selected) : undefined}
+        onSelect={setSelected}
+      />
     </div>
   );
 }

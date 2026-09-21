@@ -193,8 +193,10 @@ A single-symbol candlestick chart with a live quote header.
 - **Search** any ticker to load it.
 - **Quote header:** last price, change and % change, bid / ask / high / low, and
   a **DELAYED** badge when applicable.
-- **Timeframe presets:** 1D / 1W / 1M / 6M / 1Y / 5Y (bar size scales with the
-  range).
+- **Timeframe presets:** 1D / 1W / 1M / 6M / 1Y / 5Y / 10Y (bar size scales with
+  the range).
+- **Recently viewed:** a strip of the last 10 inspected symbols (newest first)
+  as compact sparklines below the main chart — click one to reopen it.
 
 ### Sectors (`/sectors`)
 
