@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type SymbolMatch } from "../api";
 import { SymbolSearch } from "../components/SymbolSearch";
@@ -20,7 +21,16 @@ const PRESETS = [
 const MAX_RECENTS = 10;
 
 export function ChartPage() {
-  const [selected, setSelected] = useState<SymbolMatch | null>(null);
+  // Seed the selection from ?symbol=&conId= so other tabs (e.g. the Holdings
+  // magnifier) can deep-link a ticker into the main chart.
+  const [searchParams] = useSearchParams();
+  const [selected, setSelected] = useState<SymbolMatch | null>(() => {
+    const symbol = searchParams.get("symbol") ?? undefined;
+    const conId = searchParams.get("conId");
+    const currency = searchParams.get("currency") ?? undefined;
+    if (!symbol && !conId) return null;
+    return { symbol, conId: conId ? Number(conId) : undefined, currency };
+  });
   const [presetIdx, setPresetIdx] = useState(3); // 6M
   const preset = PRESETS[presetIdx];
 

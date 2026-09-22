@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   createChart,
@@ -21,6 +22,7 @@ interface Timeframe {
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 const TIMEFRAMES: Timeframe[] = [
+  { key: "day", label: "Day", start: (n) => startOfDay(n) },
   { key: "week", label: "Week", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 7) },
   { key: "month", label: "Month", start: (n) => new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()) },
   { key: "year", label: "Year", start: (n) => new Date(n.getFullYear() - 1, n.getMonth(), n.getDate()) },
@@ -44,11 +46,21 @@ const TIMEFRAMES: Timeframe[] = [
  */
 export function HoldingsCharts({ positions }: { positions: PortfolioPosition[] }) {
   const [tfKey, setTfKey] = useState("month");
-  const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[1];
+  const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[2];
   const startSec = useMemo(() => Math.floor(tf.start(new Date()).getTime() / 1000), [tf]);
+  const navigate = useNavigate();
 
   const holdings = positions.filter((p) => p.symbol);
   if (holdings.length === 0) return null;
+
+  // Jump to the Charts tab with this holding pre-selected via URL params.
+  const openInCharts = (p: PortfolioPosition) => {
+    const qs = new URLSearchParams();
+    if (p.symbol) qs.set("symbol", p.symbol);
+    if (p.conId != null) qs.set("conId", String(p.conId));
+    if (p.currency) qs.set("currency", p.currency);
+    navigate(`/chart?${qs.toString()}`);
+  };
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
@@ -78,7 +90,9 @@ export function HoldingsCharts({ positions }: { positions: PortfolioPosition[] }
           <HoldingChartCard
             key={`${p.conId ?? p.symbol}`}
             position={p}
+            tfKey={tfKey}
             startSec={startSec}
+            onOpen={() => openInCharts(p)}
           />
         ))}
       </div>
@@ -88,30 +102,46 @@ export function HoldingsCharts({ positions }: { positions: PortfolioPosition[] }
 
 function HoldingChartCard({
   position,
+  tfKey,
   startSec,
+  onOpen,
 }: {
   position: PortfolioPosition;
+  tfKey: string;
   startSec: number;
+  onOpen: () => void;
 }) {
+  // The Day view needs intraday bars; every other timeframe slices a shared
+  // year of daily bars client-side. Two distinct queries, keyed apart so React
+  // Query caches them independently.
+  const isDay = tfKey === "day";
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["dailyBars", position.conId ?? position.symbol],
+    queryKey: ["holdingBars", position.conId ?? position.symbol, isDay ? "1D" : "1Y"],
     queryFn: () =>
       api.history({
         symbol: position.symbol,
         conId: position.conId,
-        barSize: "1 day",
-        duration: "1 Y",
+        barSize: isDay ? "5 mins" : "1 day",
+        duration: isDay ? "1 D" : "1 Y",
       }),
-    staleTime: 5 * 60_000,
+    // Poll the intraday series so the Day view tracks the live price.
+    staleTime: isDay ? 30_000 : 5 * 60_000,
+    refetchInterval: isDay ? 30_000 : false,
   });
 
   const { points, pct } = useMemo(() => {
     const bars = data?.bars ?? [];
-    let idx = bars.findIndex((b) => b.time >= startSec);
-    if (idx === -1) idx = bars.length;
-    // Include the close before the window start so the line (and the % change)
-    // is measured against the prior close, not the window's first close.
-    const windowBars = bars.slice(Math.max(0, idx - 1));
+    // Day view: use the whole intraday series, measured from the session's
+    // first bar (near the open) to the latest.
+    const windowBars = isDay
+      ? bars
+      : (() => {
+          let idx = bars.findIndex((b) => b.time >= startSec);
+          if (idx === -1) idx = bars.length;
+          // Include the close before the window start so the line (and the %
+          // change) is measured against the prior close, not the window's first.
+          return bars.slice(Math.max(0, idx - 1));
+        })();
     const points = windowBars.map((b) => ({ time: b.time, value: b.close }));
     const first = points[0]?.value;
     const last = points[points.length - 1]?.value;
@@ -120,14 +150,37 @@ function HoldingChartCard({
         ? ((last - first) / Math.abs(first)) * 100
         : undefined;
     return { points, pct };
-  }, [data, startSec]);
+  }, [data, startSec, isDay]);
 
   const last = points[points.length - 1]?.value ?? position.marketPrice;
 
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-medium text-gray-100">{position.symbol}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium text-gray-100">{position.symbol}</span>
+          <button
+            type="button"
+            onClick={onOpen}
+            title={`Open ${position.symbol} in Charts`}
+            aria-label={`Open ${position.symbol} in Charts`}
+            className="rounded p-0.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-200"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.5" y2="16.5" />
+            </svg>
+          </button>
+        </div>
         <span className="text-xs tabular-nums text-gray-400">
           {fmtNum(last)}
           <span className={`ml-2 ${pnlColor(pct)}`}>{fmtPct(pct)}</span>
@@ -141,10 +194,10 @@ function HoldingChartCard({
         </div>
       ) : points.length < 2 ? (
         <div className="flex h-32 items-center justify-center text-xs text-gray-500">
-          Not enough data for this timeframe.
+          {isDay ? "No intraday data yet." : "Not enough data for this timeframe."}
         </div>
       ) : (
-        <MiniPriceChart points={points} up={(pct ?? 0) >= 0} />
+        <MiniPriceChart points={points} up={(pct ?? 0) >= 0} timeVisible={isDay} />
       )}
     </div>
   );
@@ -153,9 +206,11 @@ function HoldingChartCard({
 function MiniPriceChart({
   points,
   up,
+  timeVisible = false,
 }: {
   points: { time: number; value: number }[];
   up: boolean;
+  timeVisible?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -213,9 +268,11 @@ function MiniPriceChart({
       topColor: up ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)",
       bottomColor: "rgba(0, 0, 0, 0)",
     });
+    // Show intraday times on the axis for the Day view; dates otherwise.
+    chartRef.current?.applyOptions({ timeScale: { timeVisible } });
     series.setData(points.map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
     chartRef.current?.timeScale().fitContent();
-  }, [points, up]);
+  }, [points, up, timeVisible]);
 
   return <div ref={containerRef} className="h-32 w-full" />;
 }

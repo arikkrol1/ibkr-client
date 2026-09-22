@@ -152,7 +152,9 @@ A live snapshot of the account, polling every 10 seconds.
   market value, unrealized P&L, and % return.
 - **Allocation:** a breakdown of portfolio weight by holding.
 - **Per-holding charts:** a small price chart per position, with
-  Week / Month / Year / WTD / MTD / YTD timeframes.
+  Day / Week / Month / Year / WTD / MTD / YTD timeframes. **Day** shows live
+  intraday movement (5-min bars, auto-refreshed). Each card has a 🔍 magnifier
+  that opens that symbol in the **Charts** tab.
 
 ### P&L (`/pnl`)
 
