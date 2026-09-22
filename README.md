@@ -94,7 +94,8 @@ up new trades within ~60s (no restart needed).
 pnpm install
 
 # Dev (two processes, hot reload):
-pnpm dev              # runs server + web together
+pnpm dev              # runs server + web together (IB_PORT default, 4001 live)
+pnpm dev:paper        # same, but against paper IB Gateway (IB_PORT=4002)
 # …or individually:
 pnpm dev:server       # backend on http://127.0.0.1:4010
 pnpm dev:web          # UI on http://127.0.0.1:5173  (proxies /api + /ws to backend)
