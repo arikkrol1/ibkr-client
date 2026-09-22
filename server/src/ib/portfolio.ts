@@ -1,4 +1,4 @@
-import { firstValueFrom, timeout, filter } from "rxjs";
+import { firstValueFrom, timeout, filter, debounceTime, merge, tap, share, of, throwError } from "rxjs";
 import type { Observable } from "rxjs";
 import { ib } from "./connection.js";
 import { ibCall } from "./ibCall.js";
@@ -37,6 +37,42 @@ export interface PortfolioSnapshot {
  */
 function firstReady<T>(obs: Observable<T>, ready: (v: T) => boolean, ms: number): Promise<T> {
   return firstValueFrom(obs.pipe(filter(ready), timeout({ first: ms })));
+}
+
+/**
+ * Settle a continuously-updating snapshot once it's actually complete.
+ *
+ * reqAccountUpdates streams position rows one at a time, so we can't trust the
+ * first emission that merely *has* balances — small positions arrive last and
+ * would be dropped. We settle on the first emission that's provably complete
+ * (`complete`), and otherwise fall back to the last emission after the stream
+ * goes quiet for `quietMs` (the download burst has finished). `maxMs` caps the
+ * wait and, on timeout, returns the latest emission we saw rather than throwing.
+ */
+function settleWhenComplete<T>(
+  obs: Observable<T>,
+  gate: (v: T) => boolean,
+  complete: (v: T) => boolean,
+  quietMs: number,
+  maxMs: number,
+): Promise<T> {
+  let last: T | undefined;
+  const gated = obs.pipe(filter(gate), tap((v) => (last = v)), share());
+  const settled = merge(
+    gated.pipe(filter(complete)), // fast path: the list already covers the account
+    gated.pipe(debounceTime(quietMs)), // safety net: stream has stopped growing
+  );
+  return firstValueFrom(
+    settled.pipe(
+      timeout({
+        first: maxMs,
+        with: () =>
+          last !== undefined
+            ? of(last)
+            : throwError(() => new Error("Timed out waiting for account updates")),
+      }),
+    ),
+  );
 }
 
 function numTag(
@@ -81,22 +117,27 @@ export async function getPortfolio(): Promise<PortfolioSnapshot> {
   // so don't settle on the first emission — wait until a real balance tag has
   // landed for the account, otherwise balances come back empty.
   const update = await ibCall(`getAccountUpdates ${account ?? "default"}`, 12_000, () =>
-    firstReady(
+    settleWhenComplete(
       ib.api.getAccountUpdates(account ?? undefined),
+      // Balances aren't ready until NetLiquidation has streamed in.
       (u) => {
         const all = u.all?.value;
         if (!all) return false;
         const vals = account ? all.get(account) : [...all.values()][0];
-        // Balances aren't ready until NetLiquidation has streamed in.
-        if (!vals?.get("NetLiquidation")) return false;
-        // Positions also stream in one row at a time and lag the balance tags.
-        // GrossPositionValue is the account's total |market value| of holdings, so
-        // wait until the rows we've collected cover it (within a small tolerance
-        // for live price drift) — otherwise we'd return a partial position list.
+        return Boolean(vals?.get("NetLiquidation"));
+      },
+      // Complete once the collected rows account for essentially all of
+      // GrossPositionValue (the account's total |market value| of holdings).
+      // Positions stream in one row at a time and lag the balance tags, so a
+      // loose threshold would drop the smallest holdings before they arrive.
+      (u) => {
+        const all = u.all?.value;
+        const vals = account ? all?.get(account) : all ? [...all.values()][0] : undefined;
         const gross = numTag(vals, "GrossPositionValue") ?? 0;
         if (gross <= 0) return true; // no holdings — nothing to wait for
-        return sumAbsMarketValue(u.all?.portfolio) >= gross * 0.98;
+        return sumAbsMarketValue(u.all?.portfolio) >= gross * 0.999;
       },
+      600, // quiet window: the initial download burst has finished
       10_000,
     ),
   );
@@ -124,6 +165,14 @@ export async function getPortfolio(): Promise<PortfolioSnapshot> {
   }
   positions.sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0));
 
+  // Fall back to the sum of per-position P&L when the account-level tag isn't
+  // delivered by reqAccountUpdates (some accounts omit UnrealizedPnL/RealizedPnL,
+  // even though every position row carries its own value).
+  const sumPositionPnL = (key: "unrealizedPnL" | "realizedPnL"): number | undefined => {
+    const vals = positions.map((p) => p[key]).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) : undefined;
+  };
+
   const values = account ? update.all?.value?.get(account) : undefined;
   const balances = {
     netLiquidation: numTag(values, "NetLiquidation"),
@@ -131,8 +180,8 @@ export async function getPortfolio(): Promise<PortfolioSnapshot> {
     buyingPower: numTag(values, "BuyingPower"),
     grossPositionValue: numTag(values, "GrossPositionValue"),
     availableFunds: numTag(values, "AvailableFunds"),
-    unrealizedPnL: numTag(values, "UnrealizedPnL"),
-    realizedPnL: numTag(values, "RealizedPnL"),
+    unrealizedPnL: numTag(values, "UnrealizedPnL") ?? sumPositionPnL("unrealizedPnL"),
+    realizedPnL: numTag(values, "RealizedPnL") ?? sumPositionPnL("realizedPnL"),
   };
 
   let dailyPnL: number | undefined;
