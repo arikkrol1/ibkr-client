@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter server --filter web dev",
     "dev:paper": "IB_PORT=4002 pnpm --parallel --filter server --filter web dev",
+    "dev:tws": "IB_PORT=7496 pnpm --parallel --filter server --filter web dev",
     "dev:server": "pnpm --filter server dev",
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm --filter server build && pnpm --filter web build",

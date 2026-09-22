@@ -96,6 +96,7 @@ pnpm install
 # Dev (two processes, hot reload):
 pnpm dev              # runs server + web together (IB_PORT default, 4001 live)
 pnpm dev:paper        # same, but against paper IB Gateway (IB_PORT=4002)
+pnpm dev:tws          # same, but against live TWS (IB_PORT=7496; use 7497 paper)
 # …or individually:
 pnpm dev:server       # backend on http://127.0.0.1:4010
 pnpm dev:web          # UI on http://127.0.0.1:5173  (proxies /api + /ws to backend)
