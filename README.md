@@ -176,6 +176,16 @@ Realized **and** unrealized P&L over time, built from your full trade history
 - **Yearly vs SPY:** the portfolio's yearly return compared against SPY, matched
   like-for-like over the months the account was active.
 
+> **What these numbers are.** Every figure on this tab (and in *Account P&L by
+> month* on the Dashboard) is derived purely from your **trades** — FIFO-replayed
+> against daily closes. Dividends, credit interest, fees, withholding tax and FX
+> moves on non-USD cash are **not** included, because a trades-only Flex Query
+> doesn't report them. The **Total %** column divides the year's P&L by the gross
+> *position* value at the prior year-end — not by net liquidation value, and not
+> time-weighted. TWS's "Total return this year" is a time-weighted return on NAV
+> that neutralises deposits and withdrawals, so the two will not agree — expect a
+> gap whenever the account earns income or is funded mid-year.
+
 ### Compare (`/compare`)
 
 ![Compare tab](docs/screenshots/compare.png)
