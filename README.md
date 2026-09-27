@@ -149,7 +149,9 @@ as **DELAYED** when the account lacks a realtime subscription.
 A live snapshot of the account, polling every 10 seconds.
 - **Summary cards:** Net Liquidation, Cash, Buying Power, Positions Value, Day
   P&L, Unrealized P&L.
-- **Account P&L by month:** a year × month grid of the whole account's P&L.
+- **Account P&L by month:** a year × month grid of the whole account's P&L,
+  with a **Total %** per year and a caption stating which data the figures rest
+  on (see the note under the P&L tab below).
 - **Positions table:** each holding with quantity, average cost, last price,
   market value, unrealized P&L, and % return.
 - **Allocation:** a breakdown of portfolio weight by holding.
@@ -183,13 +185,23 @@ Realized **and** unrealized P&L over time, built from your full trade history
 > `IB_BASE_CURRENCY` are converted at each day's rate before being summed, so a
 > lot opened and closed at different rates realises its FX move too.
 >
-> **Not** included: dividends, credit interest, fees, withholding tax, and FX on
-> cash balances — a trades-only Flex Query doesn't report them. The **Total %**
-> column divides the year's P&L by the gross *position* value at the prior
-> year-end — not by net liquidation value, and not time-weighted. TWS's "Total
-> return this year" is a time-weighted return on NAV that neutralises deposits
-> and withdrawals, so the two will not match exactly — expect a small gap
-> whenever the account earns income or is funded mid-year.
+> **Dividends, interest, withholding and fees** are included once the Flex query
+> carries a **Cash Transactions** section; without it the figures are
+> trades-only. FX on cash balances is never included.
+>
+> **Total %** divides by net liquidation value at the prior year-end — but only
+> once NAV history exists for *every* year in the grid (from a **Change in NAV**
+> or **NAV in Base** section). Until then all rows fall back to gross *position*
+> value, which ignores cash and so overstates the return on a part-invested
+> account. It is deliberately all-or-nothing: a column mixing the two bases
+> invites comparisons between rows that don't hold. The caption under the grid
+> says which basis is in play.
+>
+> These figures are **not time-weighted**, so they will not equal TWS's "Total
+> return this year" in a year with deposits or withdrawals. That metric chains
+> daily returns to neutralise funding; the difference is definitional, not an
+> error. Enable *Breakout by Day* and the statement carries IBKR's own daily
+> `twr`, which the client stores alongside each day's NAV.
 
 ### Compare (`/compare`)
 
