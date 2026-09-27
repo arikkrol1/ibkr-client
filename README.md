@@ -158,8 +158,8 @@ A live snapshot of the account, polling every 10 seconds.
 - **Summary cards:** Net Liquidation, Cash, Buying Power, Positions Value, Day
   P&L, Unrealized P&L.
 - **Account P&L by month:** a year × month grid of the whole account's P&L,
-  with a **Total %** per year and a caption stating which data the figures rest
-  on (see the note under the P&L tab below).
+  with **Total** ($), **Total %** and **TWR** per year, plus a caption stating
+  which data the figures rest on (see the note under the P&L tab below).
 - **Positions table:** each holding with quantity, average cost, last price,
   market value, unrealized P&L, and % return.
 - **Allocation:** a breakdown of portfolio weight by holding.
@@ -197,19 +197,25 @@ Realized **and** unrealized P&L over time, built from your full trade history
 > carries a **Cash Transactions** section; without it the figures are
 > trades-only. FX on cash balances is never included.
 >
-> **Total %** divides by net liquidation value at the prior year-end — but only
-> once NAV history exists for *every* year in the grid (from a **Change in NAV**
-> or **NAV in Base** section). Until then all rows fall back to gross *position*
-> value, which ignores cash and so overstates the return on a part-invested
-> account. It is deliberately all-or-nothing: a column mixing the two bases
-> invites comparisons between rows that don't hold. The caption under the grid
-> says which basis is in play.
+> The grid has two percentage columns, and they answer different questions:
 >
-> These figures are **not time-weighted**, so they will not equal TWS's "Total
-> return this year" in a year with deposits or withdrawals. That metric chains
-> daily returns to neutralise funding; the difference is definitional, not an
-> error. Enable *Breakout by Day* and the statement carries IBKR's own daily
-> `twr`, which the client stores alongside each day's NAV.
+> - **Total %** — the year's P&L over net liquidation value at the prior
+>   year-end. Money-weighted, so a mid-year deposit dilutes it: the same profit
+>   is measured against a base that grew. Falls back to gross *position* value
+>   (which ignores cash, and so overstates the return on a part-invested
+>   account) until NAV history exists for **every** year in the grid —
+>   deliberately all-or-nothing, since a column mixing the two bases invites
+>   comparisons between rows that don't hold.
+> - **TWR** — IBKR's own time-weighted return, chained from the daily `twr` in
+>   a **Change in NAV** section with *Breakout by Day* enabled. Neutralises
+>   deposits and withdrawals, so this is the column that matches TWS's "Total
+>   return this year". Blank for any year the statements don't fully cover.
+>
+> The two differ by design in a year with funding, and converge in one without.
+>
+> Both need history the 365-day Flex web service can't reach — see
+> **Backfilling** under [Prerequisites](#1-prerequisites) for importing yearly
+> statements.
 
 ### Compare (`/compare`)
 

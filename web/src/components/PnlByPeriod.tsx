@@ -21,6 +21,8 @@ interface PeriodPnl {
   byYearPct: Map<number, number | undefined>;
   /** Years whose % is measured against NAV rather than position value. */
   navBased: Set<number>;
+  /** IBKR's own time-weighted return per year, in percent, where known. */
+  byYearTwr: Map<number, number | undefined>;
   /** True once any income (dividends, interest, fees) is included. */
   hasIncome: boolean;
 }
@@ -160,12 +162,34 @@ function aggregateByMonth(
     byYearPct.set(year, denom > 1e-6 ? (pnl / denom) * 100 : undefined);
   }
 
+  // IBKR's own time-weighted return, chained from its daily values. Unlike
+  // Total % this neutralises deposits and withdrawals, so it's the figure that
+  // matches TWS — and the two legitimately differ in a year with funding.
+  // Chaining a year we only partly cover would understate it, so require
+  // account-day coverage from before the year's first month in the grid.
+  const byYearTwr = new Map<number, number | undefined>();
+  for (const year of byYear.keys()) {
+    const firstMonth = active.find((mo) => mo.y === year);
+    const days = accountDays.filter(
+      (d) => d.twr != null && new Date(d.time * 1000).getUTCFullYear() === year,
+    );
+    const covered =
+      days.length > 0 &&
+      firstMonth != null &&
+      days[0].time <= Date.UTC(year, firstMonth.m, 1) / 1000;
+    byYearTwr.set(
+      year,
+      covered ? (days.reduce((acc, d) => acc * (1 + (d.twr ?? 0) / 100), 1) - 1) * 100 : undefined,
+    );
+  }
+
   return {
     years: [...byYear.keys()].sort((a, b) => b - a),
     byMonth,
     byYear,
     byYearPct,
     navBased,
+    byYearTwr,
     hasIncome: income.length > 0,
   };
 }
@@ -217,12 +241,19 @@ export function PnlByPeriod() {
                 ))}
                 <th className="py-1.5 pl-2 text-right border-l border-gray-800">Total</th>
                 <th className="py-1.5 pl-2 text-right">Total %</th>
+                <th
+                  className="py-1.5 pl-2 text-right"
+                  title="IBKR's own time-weighted return — neutralises deposits and withdrawals"
+                >
+                  TWR
+                </th>
               </tr>
             </thead>
             <tbody>
               {periods.years.map((year) => {
                 const total = periods.byYear.get(year);
                 const pct = periods.byYearPct.get(year);
+                const twr = periods.byYearTwr.get(year);
                 return (
                   <tr key={year} className="border-b border-gray-900 hover:bg-gray-900/60">
                     <td className="py-1.5 pr-3 font-medium text-gray-100">{year}</td>
@@ -253,6 +284,13 @@ export function PnlByPeriod() {
                     >
                       {fmtPct(pct)}
                     </td>
+                    <td
+                      className={`py-1.5 pl-2 text-right tabular-nums ${
+                        twr == null ? "text-gray-600" : pnlColor(twr)
+                      }`}
+                    >
+                      {fmtPct(twr)}
+                    </td>
                   </tr>
                 );
               })}
@@ -263,9 +301,11 @@ export function PnlByPeriod() {
               ? "Includes dividends, interest and fees."
               : "Trades only — dividends, interest and fees need Cash Transactions in the Flex query."}{" "}
             {periods.navBased.size > 0
-              ? "Total % is measured against net liquidation value at the prior year-end."
-              : "Total % is measured against position value at the prior year-end, which ignores cash — import NAV history for every year to measure against net liquidation value instead."}{" "}
-            Not time-weighted, so it won&rsquo;t match TWS&rsquo;s return in a year with deposits.
+              ? "Total % is this year\u2019s P&L over net liquidation value at the prior year-end."
+              : "Total % is measured against position value at the prior year-end, which ignores cash \u2014 import NAV history for every year to measure against net liquidation value instead."}{" "}
+            TWR is IBKR&rsquo;s own time-weighted return, which neutralises deposits and
+            withdrawals; the two columns differ by design in a year with funding, and
+            converge in one without.
           </p>
         </div>
       )}
