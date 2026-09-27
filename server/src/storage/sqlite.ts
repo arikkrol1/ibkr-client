@@ -1,7 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Storage, StoredTrade, StoredBar } from "./storage.js";
+import type {
+  Storage,
+  StoredTrade,
+  StoredBar,
+  StoredAccountDay,
+  StoredCashTransaction,
+} from "./storage.js";
 
 /** The only file in the codebase that knows SQL. */
 
@@ -37,6 +43,27 @@ CREATE TABLE IF NOT EXISTS bars_daily (
   volume REAL NOT NULL,
   PRIMARY KEY (contract_key, time)
 );
+
+CREATE TABLE IF NOT EXISTS account_days (
+  date     INTEGER PRIMARY KEY,
+  currency TEXT,
+  nav      REAL,
+  cash     REAL,
+  stock    REAL,
+  twr      REAL
+);
+
+CREATE TABLE IF NOT EXISTS cash_transactions (
+  tx_key   TEXT PRIMARY KEY,
+  time     INTEGER NOT NULL,
+  type     TEXT    NOT NULL,
+  kind     TEXT    NOT NULL,
+  symbol   TEXT,
+  con_id   INTEGER,
+  currency TEXT,
+  amount   REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cash_tx_time ON cash_transactions(time);
 
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
@@ -153,6 +180,78 @@ export class SqliteStorage implements Storage {
       del.run(contractKey);
       for (const b of bars) ins.run(contractKey, b.time, b.open, b.high, b.low, b.close, b.volume);
     });
+  }
+
+  async upsertAccountDays(days: StoredAccountDay[]): Promise<number> {
+    // Sections arrive in separate statements, so merge field-by-field rather
+    // than replacing the row — COALESCE keeps whatever a later row omits.
+    const stmt = this.db.prepare(
+      `INSERT INTO account_days (date, currency, nav, cash, stock, twr)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(date) DO UPDATE SET
+         currency = COALESCE(excluded.currency, account_days.currency),
+         nav      = COALESCE(excluded.nav,      account_days.nav),
+         cash     = COALESCE(excluded.cash,     account_days.cash),
+         stock    = COALESCE(excluded.stock,    account_days.stock),
+         twr      = COALESCE(excluded.twr,      account_days.twr)`,
+    );
+    return this.transaction(() => {
+      for (const d of days) {
+        stmt.run(
+          d.date,
+          d.currency ?? null,
+          d.nav ?? null,
+          d.cash ?? null,
+          d.stock ?? null,
+          d.twr ?? null,
+        );
+      }
+      return days.length;
+    });
+  }
+
+  async getAccountDays(fromTime: number): Promise<StoredAccountDay[]> {
+    return this.db
+      .prepare(
+        `SELECT date, currency, nav, cash, stock, twr
+           FROM account_days WHERE date >= ? ORDER BY date`,
+      )
+      .all(fromTime) as unknown as StoredAccountDay[];
+  }
+
+  async upsertCashTransactions(rows: StoredCashTransaction[]): Promise<number> {
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO cash_transactions
+         (tx_key, time, type, kind, symbol, con_id, currency, amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    return this.transaction(() => {
+      let inserted = 0;
+      for (const r of rows) {
+        const res = stmt.run(
+          r.txKey,
+          r.time,
+          r.type,
+          r.kind,
+          r.symbol ?? null,
+          r.conId ?? null,
+          r.currency ?? null,
+          r.amount,
+        );
+        inserted += Number(res.changes ?? 0);
+      }
+      return inserted;
+    });
+  }
+
+  async getCashTransactions(fromTime: number): Promise<StoredCashTransaction[]> {
+    return this.db
+      .prepare(
+        `SELECT tx_key AS txKey, time, type, kind, symbol, con_id AS conId,
+                currency, amount
+           FROM cash_transactions WHERE time >= ? ORDER BY time`,
+      )
+      .all(fromTime) as unknown as StoredCashTransaction[];
   }
 
   async getMeta(key: string): Promise<string | null> {

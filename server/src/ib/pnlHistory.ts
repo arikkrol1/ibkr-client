@@ -1,7 +1,14 @@
 import { resolveContract } from "./contracts.js";
 import { getHistory, type HistoryBar } from "./marketData.js";
 import { getPortfolio, type PortfolioPosition } from "./portfolio.js";
-import { getFlexTrades, flexConfigured, tradesAsOf, type FlexTrade } from "./flex.js";
+import {
+  getFlexTrades,
+  flexConfigured,
+  tradesAsOf,
+  getAccountDays,
+  getCashTransactions,
+  type FlexTrade,
+} from "./flex.js";
 import { getFxRates, type FxRates } from "./fx.js";
 import { config } from "../config.js";
 
@@ -30,8 +37,39 @@ export interface PnlSeries {
   points: PnlPoint[];
 }
 
+/** A day of account-level state, when the Flex query reports one. */
+export interface AccountDay {
+  /** UTC midnight, UNIX seconds. */
+  time: number;
+  nav?: number;
+  cash?: number;
+  stock?: number;
+  /** IBKR's own time-weighted return for that day, in percent. */
+  twr?: number;
+}
+
+/** Non-trade P&L: dividends, interest, withholding, fees. */
+export interface IncomeEntry {
+  time: number;
+  /** IBKR's label, e.g. "Dividends". */
+  type: string;
+  symbol?: string;
+  /** Base currency; negative for withholding and fees. */
+  amount: number;
+}
+
 export interface PnlHistory {
   series: PnlSeries[];
+  /**
+   * Account balances per report date. Empty until the Flex query includes a
+   * NAV section — the UI falls back to position value for the % denominator.
+   */
+  accountDays: AccountDay[];
+  /**
+   * Income the trade replay structurally can't see. Empty until the Flex query
+   * includes Cash Transactions.
+   */
+  income: IncomeEntry[];
   errors: { symbol: string; message: string }[];
   /** Epoch ms of the last successful Flex fetch backing this data. */
   tradesAsOf?: number;
@@ -430,7 +468,28 @@ async function flexHistory(days: number): Promise<PnlHistory> {
     } satisfies PnlSeries;
   });
 
-  return { series: sortSeries(series), errors, tradesAsOf: await tradesAsOf() };
+  const [accountDays, cash] = await Promise.all([
+    getAccountDays(startTime),
+    getCashTransactions(startTime),
+  ]);
+
+  return {
+    series: sortSeries(series),
+    accountDays: accountDays.map((d) => ({
+      time: d.date,
+      nav: d.nav,
+      cash: d.cash,
+      stock: d.stock,
+      twr: d.twr,
+    })),
+    // Deposits and withdrawals move money without earning it — they belong to
+    // the denominator, not the numerator, so only income crosses the API.
+    income: cash
+      .filter((c) => c.kind === "income")
+      .map((c) => ({ time: c.time, type: c.type, symbol: c.symbol, amount: c.amount })),
+    errors,
+    tradesAsOf: await tradesAsOf(),
+  };
 }
 
 function sortSeries(series: PnlSeries[]): PnlSeries[] {

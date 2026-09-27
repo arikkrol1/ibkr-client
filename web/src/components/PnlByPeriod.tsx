@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type PnlSeries } from "../api";
+import { api, type AccountDay, type IncomeEntry, type PnlSeries } from "../api";
 import { fmtPct, pnlColor } from "../utils/format";
 
 // Widest span the /api/pnl endpoint accepts (5 years).
@@ -17,8 +17,12 @@ interface PeriodPnl {
   /** `${year}-${month0}` -> P&L accrued that month. */
   byMonth: Map<string, number>;
   byYear: Map<number, number>;
-  /** Year P&L as % of the portfolio's market value at the start of that year. */
+  /** Year P&L as % of the account's value at the start of that year. */
   byYearPct: Map<number, number | undefined>;
+  /** Years whose % is measured against NAV rather than position value. */
+  navBased: Set<number>;
+  /** True once any income (dividends, interest, fees) is included. */
+  hasIncome: boolean;
 }
 
 /**
@@ -29,7 +33,11 @@ interface PeriodPnl {
  * P&L). Positions opened before the Flex window are seeded server-side at
  * avg cost, so their pre-window gains land in the earliest month shown.
  */
-function aggregateByMonth(series: PnlSeries[]): PeriodPnl | null {
+function aggregateByMonth(
+  series: PnlSeries[],
+  income: IncomeEntry[],
+  accountDays: AccountDay[],
+): PeriodPnl | null {
   let minT = Infinity;
   let maxT = -Infinity;
   for (const s of series) {
@@ -80,21 +88,65 @@ function aggregateByMonth(series: PnlSeries[]): PeriodPnl | null {
   cum = cum.slice(firstActive);
   mvAbs = mvAbs.slice(firstActive);
 
+  // Income is a flow, not a running total — bucket each entry into its month.
+  const incomeByMonth = new Map<string, number>();
+  for (const entry of income) {
+    const d = new Date(entry.time * 1000);
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    incomeByMonth.set(key, (incomeByMonth.get(key) ?? 0) + entry.amount);
+  }
+
   const byMonth = new Map<string, number>();
   const byYear = new Map<number, number>();
   active.forEach((mo, b) => {
-    const pnl = cum[b] - (b > 0 ? cum[b - 1] : 0);
-    byMonth.set(`${mo.y}-${mo.m}`, pnl);
+    const key = `${mo.y}-${mo.m}`;
+    const pnl = cum[b] - (b > 0 ? cum[b - 1] : 0) + (incomeByMonth.get(key) ?? 0);
+    byMonth.set(key, pnl);
     byYear.set(mo.y, (byYear.get(mo.y) ?? 0) + pnl);
   });
 
-  // % denominator per year: gross market value at the prior year's end. For
-  // years without one (data starts mid-year), fall back to the deployed cost
-  // of the series trading by that year's end — mirrors PnlPctChart's fallback.
+  // % denominator per year, best source first:
+  //   1. the account's NAV at the prior year-end — what the money was actually
+  //      measured against, cash included;
+  //   2. gross position market value at the prior year-end, which ignores cash
+  //      and so overstates the return on a part-invested account;
+  //   3. the deployed cost of everything trading by that year's end, for years
+  //      that start mid-stream — mirrors PnlPctChart's fallback.
+  const navByYearEnd = new Map<number, number>();
+  for (const d of accountDays) {
+    if (d.nav == null) continue;
+    const date = new Date(d.time * 1000);
+    // The last report date of the year is that year's closing NAV.
+    const year = date.getUTCFullYear();
+    const prev = navByYearEnd.get(year);
+    if (prev == null || d.time > prev) navByYearEnd.set(year, d.time);
+  }
+  const navAt = new Map<number, number>();
+  for (const [year, time] of navByYearEnd) {
+    const day = accountDays.find((d) => d.time === time);
+    if (day?.nav != null) navAt.set(year, day.nav);
+  }
+
+  // All-or-nothing: a column where one row is measured against NAV and the
+  // next against position value invites comparisons that don't hold. NAV data
+  // only reaches back as far as the Flex statements that carried a NAV section,
+  // so use it only once every year can. The account's first year never has a
+  // prior year-end at all, so it can't block the upgrade.
+  const ordered = [...byYear.keys()].sort((a, b) => a - b);
+  const needNav = ordered.slice(1);
+  const useNav =
+    needNav.length > 0 && needNav.every((year) => (navAt.get(year - 1) ?? 0) > 1e-6);
+
   const byYearPct = new Map<number, number | undefined>();
+  const navBased = new Set<number>();
   for (const [year, pnl] of byYear) {
-    const prior = active.findIndex((mo) => mo.y === year - 1 && mo.m === 11);
-    let denom = prior >= 0 ? mvAbs[prior] : 0;
+    let denom = useNav ? (navAt.get(year - 1) ?? 0) : 0;
+    if (denom > 1e-6) {
+      navBased.add(year);
+    } else {
+      const prior = active.findIndex((mo) => mo.y === year - 1 && mo.m === 11);
+      denom = prior >= 0 ? mvAbs[prior] : 0;
+    }
     if (denom < 1e-6) {
       const yearEndSec = Date.UTC(year + 1, 0, 1) / 1000;
       denom = series.reduce(
@@ -108,7 +160,14 @@ function aggregateByMonth(series: PnlSeries[]): PeriodPnl | null {
     byYearPct.set(year, denom > 1e-6 ? (pnl / denom) * 100 : undefined);
   }
 
-  return { years: [...byYear.keys()].sort((a, b) => b - a), byMonth, byYear, byYearPct };
+  return {
+    years: [...byYear.keys()].sort((a, b) => b - a),
+    byMonth,
+    byYear,
+    byYearPct,
+    navBased,
+    hasIncome: income.length > 0,
+  };
 }
 
 function fmtMoney0(v: number): string {
@@ -127,7 +186,10 @@ export function PnlByPeriod() {
   });
 
   const periods = useMemo(
-    () => (data ? aggregateByMonth(data.series) : null),
+    () =>
+      data
+        ? aggregateByMonth(data.series, data.income ?? [], data.accountDays ?? [])
+        : null,
     [data],
   );
 
@@ -196,6 +258,15 @@ export function PnlByPeriod() {
               })}
             </tbody>
           </table>
+          <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+            {periods.hasIncome
+              ? "Includes dividends, interest and fees."
+              : "Trades only — dividends, interest and fees need Cash Transactions in the Flex query."}{" "}
+            {periods.navBased.size > 0
+              ? "Total % is measured against net liquidation value at the prior year-end."
+              : "Total % is measured against position value at the prior year-end, which ignores cash — import NAV history for every year to measure against net liquidation value instead."}{" "}
+            Not time-weighted, so it won&rsquo;t match TWS&rsquo;s return in a year with deposits.
+          </p>
         </div>
       )}
     </div>

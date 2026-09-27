@@ -3,7 +3,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { config } from "../config.js";
-import { getStorage, type StoredTrade } from "../storage/storage.js";
+import {
+  getStorage,
+  type StoredTrade,
+  type StoredAccountDay,
+  type StoredCashTransaction,
+} from "../storage/storage.js";
 
 /**
  * IBKR Flex Web Service client. Flex Queries are the only IBKR API surface that
@@ -143,20 +148,20 @@ function parseFlexTime(raw: string | undefined): number | undefined {
   return Number.isFinite(t) ? t : undefined;
 }
 
-/** Collect every <Trade …/> element anywhere in the parsed statement tree. */
-function collectTradeNodes(node: unknown, out: Record<string, string>[]): void {
+/** Collect every <`tag` …/> element anywhere in the parsed statement tree. */
+function collectNodes(node: unknown, tag: string, out: Record<string, string>[]): void {
   if (node == null || typeof node !== "object") return;
   if (Array.isArray(node)) {
-    for (const item of node) collectTradeNodes(item, out);
+    for (const item of node) collectNodes(item, tag, out);
     return;
   }
   for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    if (key === "Trade") {
+    if (key === tag) {
       for (const t of Array.isArray(value) ? value : [value]) {
         if (t && typeof t === "object") out.push(t as Record<string, string>);
       }
     } else {
-      collectTradeNodes(value, out);
+      collectNodes(value, tag, out);
     }
   }
 }
@@ -208,7 +213,7 @@ export function parseFlexStatementXml(xml: string): FlexTrade[] | null {
     throw new Error(`Flex GetStatement failed: ${err.ErrorMessage ?? err.ErrorCode}`);
   }
   const nodes: Record<string, string>[] = [];
-  collectTradeNodes(stmt, nodes);
+  collectNodes(stmt, "Trade", nodes);
   const all = nodes
     .map(toTrade)
     .filter((t): t is FlexTrade & { detail?: string } => t !== null);
@@ -217,6 +222,103 @@ export function parseFlexStatementXml(xml: string): FlexTrade[] | null {
   const executions = all.filter((t) => t.detail === "EXECUTION");
   const chosen = executions.length > 0 ? executions : all;
   return chosen.map(({ detail: _detail, ...t }) => t);
+}
+
+/** Numeric attribute, 0 when absent or unparseable. */
+function num(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Account-level daily state: balances from EquitySummaryByReportDateInBase and
+ * IBKR's own time-weighted return from ChangeInNAV. Only single-day ChangeInNAV
+ * rows are read — without "Breakout by Day" the section is one aggregate over
+ * the whole query period, and dating that to either endpoint would be wrong.
+ */
+export function parseAccountDaysXml(xml: string): StoredAccountDay[] {
+  const stmt = parser.parse(xml);
+  const byDate = new Map<number, StoredAccountDay>();
+  const at = (date: number): StoredAccountDay => {
+    let d = byDate.get(date);
+    if (!d) {
+      d = { date };
+      byDate.set(date, d);
+    }
+    return d;
+  };
+
+  const equity: Record<string, string>[] = [];
+  collectNodes(stmt, "EquitySummaryByReportDateInBase", equity);
+  for (const e of equity) {
+    const date = parseFlexTime(e.reportDate);
+    if (date == null) continue;
+    const d = at(date);
+    d.currency = e.currency || d.currency;
+    d.nav = num(e.total);
+    d.cash = num(e.cash);
+    d.stock = num(e.stock);
+  }
+
+  const changes: Record<string, string>[] = [];
+  collectNodes(stmt, "ChangeInNAV", changes);
+  for (const c of changes) {
+    if (!c.fromDate || c.fromDate !== c.toDate) continue;
+    const date = parseFlexTime(c.toDate);
+    if (date == null) continue;
+    const d = at(date);
+    d.currency = c.currency || d.currency;
+    d.twr = num(c.twr);
+    d.nav ??= num(c.endingValue);
+  }
+
+  return [...byDate.values()].sort((a, b) => a.date - b.date);
+}
+
+/**
+ * Deposits and withdrawals move money without earning it. Everything else in a
+ * Cash Transactions section — dividends, interest, withholding, fees — is P&L
+ * the trade replay can't see.
+ */
+function classifyCashTransaction(type: string): "income" | "flow" {
+  return /deposit|withdraw|transfer/i.test(type) ? "flow" : "income";
+}
+
+/**
+ * Cash transactions, converted into the account's base currency. Amounts are
+ * quoted in the transaction's own currency, with fxRateToBase alongside.
+ */
+export function parseCashTransactionsXml(xml: string): StoredCashTransaction[] {
+  const stmt = parser.parse(xml);
+  const nodes: Record<string, string>[] = [];
+  collectNodes(stmt, "CashTransaction", nodes);
+
+  // A query can carry both SUMMARY and DETAIL rows for the same money — keep
+  // one level only, same as trades.
+  const detail = nodes.filter((n) => n.levelOfDetail === "DETAIL");
+  const chosen = detail.length > 0 ? detail : nodes;
+
+  const rows: StoredCashTransaction[] = [];
+  for (const n of chosen) {
+    const time = parseFlexTime(n.dateTime ?? n.settleDate ?? n.reportDate);
+    const type = n.type;
+    if (time == null || !type) continue;
+    const amount = num(n.amount);
+    if (amount === 0) continue;
+    const rate = n.fxRateToBase ? num(n.fxRateToBase) : 1;
+    const conId = Number(n.conid);
+    rows.push({
+      txKey: n.transactionID || `${type}|${time}|${amount}|${n.symbol ?? ""}`,
+      time,
+      type,
+      kind: classifyCashTransaction(type),
+      symbol: n.symbol || undefined,
+      conId: Number.isFinite(conId) && conId > 0 ? conId : undefined,
+      currency: n.currency || undefined,
+      amount: amount * (rate > 0 ? rate : 1),
+    });
+  }
+  return rows;
 }
 
 async function fetchQueryStatement(
@@ -251,10 +353,27 @@ async function fetchQueryStatement(
  * service's 365-day lookback cap). Archives the raw XML and merges trades;
  * already-known tradeKeys are ignored, so overlapping statements are safe.
  */
+/**
+ * Persist whatever account-level sections a statement happens to carry. Older
+ * statements are trades-only, so both sections are optional — and because the
+ * raw XML is archived, enabling a new section later can be backfilled from the
+ * archive rather than re-fetched.
+ */
+async function storeAccountSections(
+  xml: string,
+): Promise<{ accountDays: number; cashTransactions: number }> {
+  const store = getStorage();
+  const days = parseAccountDaysXml(xml);
+  const cash = parseCashTransactionsXml(xml);
+  if (days.length > 0) await store.upsertAccountDays(days);
+  const inserted = cash.length > 0 ? await store.upsertCashTransactions(cash) : 0;
+  return { accountDays: days.length, cashTransactions: inserted };
+}
+
 export async function importFlexStatement(
   xml: string,
   label: string,
-): Promise<{ parsed: number; inserted: number }> {
+): Promise<{ parsed: number; inserted: number; accountDays: number; cashTransactions: number }> {
   const trades = parseFlexStatementXml(xml);
   if (trades == null) {
     throw new Error("XML is a pending-statement placeholder (Flex error 1019), not a statement");
@@ -264,7 +383,8 @@ export async function importFlexStatement(
   const inserted = await store.upsertTrades(
     trades.map((t) => ({ ...t, tradeKey: tradeKeyOf(t) })),
   );
-  return { parsed: trades.length, inserted };
+  const account = await storeAccountSections(xml);
+  return { parsed: trades.length, inserted, ...account };
 }
 
 async function activeCooldown(): Promise<Cooldown | null> {
@@ -321,7 +441,10 @@ async function fetchAndStore(): Promise<void> {
         merged.set(tradeKey, { ...t, tradeKey });
       }
     }
-    for (const s of statements) await store.archiveFlexStatement(s.queryId, s.xml);
+    for (const s of statements) {
+      await store.archiveFlexStatement(s.queryId, s.xml);
+      await storeAccountSections(s.xml);
+    }
     await store.upsertTrades([...merged.values()]);
     await store.setMeta(META_LAST_SUCCESS, String(Date.now()));
     await store.deleteMeta(META_COOLDOWN);
@@ -337,6 +460,18 @@ async function fetchAndStore(): Promise<void> {
 
 async function storedFlexTrades(): Promise<FlexTrade[]> {
   return (await getStorage().getAllTrades()).map(({ tradeKey: _k, ...t }) => t);
+}
+
+/** Account-level daily balances and IBKR's own TWR, from storage. */
+export async function getAccountDays(fromTime: number): Promise<StoredAccountDay[]> {
+  return getStorage().getAccountDays(fromTime);
+}
+
+/** Dividends, interest and fees — P&L the trade replay can't see. */
+export async function getCashTransactions(
+  fromTime: number,
+): Promise<StoredCashTransaction[]> {
+  return getStorage().getCashTransactions(fromTime);
 }
 
 /** Epoch ms of the last successful Flex fetch, if any. */

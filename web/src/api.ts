@@ -102,8 +102,32 @@ export interface PnlSeries {
   points: PnlPoint[];
 }
 
+/** A day of account-level state, when the Flex query reports one. */
+export interface AccountDay {
+  /** UTC midnight, UNIX seconds. */
+  time: number;
+  nav?: number;
+  cash?: number;
+  stock?: number;
+  /** IBKR's own time-weighted return for that day, in percent. */
+  twr?: number;
+}
+
+/** Non-trade P&L: dividends, interest, withholding, fees. */
+export interface IncomeEntry {
+  time: number;
+  type: string;
+  symbol?: string;
+  /** Base currency; negative for withholding and fees. */
+  amount: number;
+}
+
 export interface PnlHistory {
   series: PnlSeries[];
+  /** Empty until the Flex query includes a NAV section. */
+  accountDays: AccountDay[];
+  /** Empty until the Flex query includes Cash Transactions. */
+  income: IncomeEntry[];
   errors: { symbol: string; message: string }[];
   /** Epoch ms of the last successful trade-history fetch. */
   tradesAsOf?: number;

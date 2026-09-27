@@ -25,11 +25,18 @@ if (files.length === 0) {
 
 for (const file of files) {
   const xml = readFileSync(file, "utf8");
-  const { parsed, inserted } = await importFlexStatement(xml, `manual:${basename(file)}`);
-  console.log(`${file}: ${parsed} trades in statement, ${inserted} new`);
-  if (parsed === 0) {
+  const { parsed, inserted, accountDays, cashTransactions } = await importFlexStatement(
+    xml,
+    `manual:${basename(file)}`,
+  );
+  console.log(
+    `${file}: ${parsed} trades in statement, ${inserted} new` +
+      `; ${accountDays} account days, ${cashTransactions} new cash transactions`,
+  );
+  if (parsed === 0 && accountDays === 0 && cashTransactions === 0) {
     console.warn(
-      `  warning: no <Trade> rows found — check the query includes the Trades section`,
+      `  warning: nothing recognised — check the query includes Trades, a NAV section, ` +
+        `or Cash Transactions`,
     );
   }
 }
