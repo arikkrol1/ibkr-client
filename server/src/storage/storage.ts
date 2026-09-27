@@ -74,6 +74,8 @@ export interface StoredCashTransaction {
 export interface Storage {
   /** Append-only archive of raw Flex statement XML (re-parse insurance). */
   archiveFlexStatement(queryId: string, xml: string): Promise<void>;
+  /** Every archived statement, oldest first — for re-parsing after a parser change. */
+  getFlexStatements(): Promise<{ queryId: string; fetchedAt: number; xml: string }[]>;
 
   /** Insert trades, ignoring already-known tradeKeys. Returns # newly inserted. */
   upsertTrades(trades: StoredTrade[]): Promise<number>;

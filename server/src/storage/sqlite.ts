@@ -99,6 +99,15 @@ export class SqliteStorage implements Storage {
       .run(queryId, Date.now(), xml);
   }
 
+  async getFlexStatements(): Promise<{ queryId: string; fetchedAt: number; xml: string }[]> {
+    return this.db
+      .prepare(
+        `SELECT query_id AS queryId, fetched_at AS fetchedAt, xml
+           FROM flex_statements ORDER BY id`,
+      )
+      .all() as unknown as { queryId: string; fetchedAt: number; xml: string }[];
+  }
+
   async upsertTrades(trades: StoredTrade[]): Promise<number> {
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO trades

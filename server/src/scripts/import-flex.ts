@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { importFlexStatement } from "../ib/flex.js";
+import { importFlexStatement, reparseArchive } from "../ib/flex.js";
 import { getStorage } from "../storage/storage.js";
 
 /**
@@ -17,9 +17,26 @@ import { getStorage } from "../storage/storage.js";
  * trades up within its 60s P&L response cache (no restart needed).
  */
 
-const files = process.argv.slice(2);
+const args = process.argv.slice(2);
+
+// Re-read sections out of statements already on disk — no IBKR round trip, so
+// it's free and unaffected by the rate limiter.
+if (args.includes("--from-archive")) {
+  const { statements, accountDays, cashTransactions } = await reparseArchive();
+  console.log(
+    `re-parsed ${statements} archived statements: ` +
+      `${accountDays} account days, ${cashTransactions} new cash transactions`,
+  );
+  await getStorage().close();
+  process.exit(0);
+}
+
+const files = args;
 if (files.length === 0) {
-  console.error("Usage: pnpm --filter server import:flex <statement.xml> [more.xml …]");
+  console.error(
+    "Usage: pnpm --filter server import:flex <statement.xml> [more.xml …]\n" +
+      "       pnpm --filter server import:flex --from-archive",
+  );
   process.exit(1);
 }
 

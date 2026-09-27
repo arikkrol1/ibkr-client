@@ -86,6 +86,14 @@ pnpm --filter server import:flex ~/Downloads/2021.xml ~/Downloads/2022.xml …
 Imports dedup on trade id, so re-running is safe, and the running server picks
 up new trades within ~60s (no restart needed).
 
+**After enabling a new Flex section:** every statement ever fetched is archived
+as raw XML, so a newly-enabled section can be read out of *older* statements
+without re-fetching them (which the rate limiter would throttle anyway):
+
+```bash
+pnpm --filter server import:flex --from-archive
+```
+
 ---
 
 ## 2. Install & run

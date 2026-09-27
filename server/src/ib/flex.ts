@@ -462,6 +462,28 @@ async function storedFlexTrades(): Promise<FlexTrade[]> {
   return (await getStorage().getAllTrades()).map(({ tradeKey: _k, ...t }) => t);
 }
 
+/**
+ * Re-parse every archived statement. Enabling a new Flex section, or teaching
+ * the parser a new one, doesn't require re-fetching from IBKR — the raw XML of
+ * every statement ever pulled is kept for exactly this.
+ */
+export async function reparseArchive(): Promise<{
+  statements: number;
+  accountDays: number;
+  cashTransactions: number;
+}> {
+  const store = getStorage();
+  const archived = await store.getFlexStatements();
+  let accountDays = 0;
+  let cashTransactions = 0;
+  for (const { xml } of archived) {
+    const result = await storeAccountSections(xml);
+    accountDays += result.accountDays;
+    cashTransactions += result.cashTransactions;
+  }
+  return { statements: archived.length, accountDays, cashTransactions };
+}
+
 /** Account-level daily balances and IBKR's own TWR, from storage. */
 export async function getAccountDays(fromTime: number): Promise<StoredAccountDay[]> {
   return getStorage().getAccountDays(fromTime);
