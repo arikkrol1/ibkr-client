@@ -2,11 +2,13 @@ import { resolveContract } from "./contracts.js";
 import { getHistory, type HistoryBar } from "./marketData.js";
 import { getPortfolio, type PortfolioPosition } from "./portfolio.js";
 import { getFlexTrades, flexConfigured, tradesAsOf, type FlexTrade } from "./flex.js";
+import { getFxRates, type FxRates } from "./fx.js";
+import { config } from "../config.js";
 
 export interface PnlPoint {
   /** UNIX seconds (UTC), daily resolution. */
   time: number;
-  /** Cumulative P&L (realized + unrealized) in the instrument's currency. */
+  /** Cumulative P&L (realized + unrealized), in the account's base currency. */
   value: number;
   /** Market value of the open position that day (signed; 0 when flat/unknown). */
   mv: number;
@@ -16,6 +18,7 @@ export interface PnlSeries {
   key: string;
   symbol: string;
   secType?: string;
+  /** The instrument's own quote currency (P&L below is in the account's base). */
   currency?: string;
   /** True when the position is currently closed (flex mode only). */
   closed?: boolean;
@@ -288,6 +291,29 @@ function seedMissing(
   });
 }
 
+/**
+ * Restate a foreign-currency instrument in the account's base currency, at the
+ * rate on each day. Converting the inputs rather than the output means the FIFO
+ * replay runs natively in base: a lot opened at one rate and closed at another
+ * realizes the FX move too, which is what actually happened to the account.
+ */
+function toBaseCurrency(
+  trades: FlexTrade[],
+  bars: HistoryBar[],
+  rates: FxRates,
+): { trades: FlexTrade[]; bars: HistoryBar[] } {
+  return {
+    trades: trades.map((t) => {
+      const r = rates.at(t.time);
+      return { ...t, price: t.price * r, commission: t.commission * r };
+    }),
+    bars: bars.map((b) => {
+      const r = rates.at(b.time);
+      return { ...b, open: b.open * r, high: b.high * r, low: b.low * r, close: b.close * r };
+    }),
+  };
+}
+
 async function flexHistory(days: number): Promise<PnlHistory> {
   // Forex conversions (assetCategory CASH) are funding, not investments.
   const trades = (await getFlexTrades()).filter((t) => t.secType !== "CASH");
@@ -367,10 +393,28 @@ async function flexHistory(days: number): Promise<PnlHistory> {
       );
     }
 
-    let replay = bars.length > 0
-      ? replaySeries(ts, bars.filter((b) => b.time >= startTime))
-      : flatSeries(ts, startTime, nowSec);
-    if (replay.points.length === 0) replay = flatSeries(ts, startTime, nowSec);
+    // Restate in base currency before the replay, so every series the UI sums
+    // together is denominated the same way.
+    let priced = ts;
+    let quotes = bars;
+    if (currency && currency !== config.baseCurrency) {
+      const rates = await getFxRates(currency, config.baseCurrency, toDuration(days));
+      if (rates) {
+        ({ trades: priced, bars: quotes } = toBaseCurrency(ts, bars, rates));
+      } else {
+        errors.push({
+          symbol,
+          message:
+            `No ${currency}/${config.baseCurrency} rate available — P&L for ${symbol} ` +
+            `is shown in ${currency} and is not comparable to the rest of the account`,
+        });
+      }
+    }
+
+    let replay = quotes.length > 0
+      ? replaySeries(priced, quotes.filter((b) => b.time >= startTime))
+      : flatSeries(priced, startTime, nowSec);
+    if (replay.points.length === 0) replay = flatSeries(priced, startTime, nowSec);
 
     return {
       key,

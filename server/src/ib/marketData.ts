@@ -49,6 +49,8 @@ export interface HistoryParams {
   /** e.g. "6 M", "1 Y", "5 D" */
   duration: string;
   useRTH: boolean;
+  /** Defaults to TRADES; CASH (forex) contracts have no trades — use MIDPOINT. */
+  whatToShow?: WhatToShow;
 }
 
 // --- historical bars: cache + in-flight de-dupe to respect IBKR pacing ---
@@ -64,7 +66,7 @@ const inFlight = new Map<string, Promise<HistoryBar[]>>();
 function cacheKey(p: HistoryParams): string {
   const c = p.contract;
   const id = c.conId ?? `${c.symbol}:${c.currency}:${c.exchange}`;
-  return `${id}|${p.barSize}|${p.duration}|${p.useRTH}`;
+  return `${id}|${p.barSize}|${p.duration}|${p.useRTH}|${p.whatToShow ?? WhatToShow.TRADES}`;
 }
 
 // Cheap monotonic-ish clock without Date.now (fine for TTL comparisons).
@@ -97,7 +99,7 @@ async function requestBars(p: HistoryParams): Promise<HistoryBar[]> {
         "", // endDateTime "" = now
         p.duration,
         p.barSize as BarSizeSetting,
-        WhatToShow.TRADES,
+        p.whatToShow ?? WhatToShow.TRADES,
         p.useRTH ? 1 : 0,
         2, // formatDate=2 → epoch seconds
       ),

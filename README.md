@@ -124,6 +124,7 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 | `IB_CLIENT_ID` | Optional | `10` | API client id |
 | `IB_MARKET_DATA_TYPE` | **Set to `3` if no realtime sub** | `1` | 1=realtime, 3=delayed, 2/4=frozen variants |
 | `IB_RECONNECT_MS` | Optional | `5000` | Auto-reconnect interval |
+| `IB_BASE_CURRENCY` | Optional | `USD` | Account base currency; P&L on instruments quoted in anything else is converted into it |
 | `IB_FLEX_TOKEN` | **Required for full P&L history** | *(empty)* | Flex Web Service token |
 | `IB_FLEX_QUERY_ID` | **Required for full P&L history** | *(empty)* | Flex query id(s); comma-separated for multiple year ranges |
 | `IB_FLEX_REFRESH_HOURS` | Optional | `12` | Hours stored trades stay fresh before re-fetch |
@@ -178,13 +179,17 @@ Realized **and** unrealized P&L over time, built from your full trade history
 
 > **What these numbers are.** Every figure on this tab (and in *Account P&L by
 > month* on the Dashboard) is derived purely from your **trades** — FIFO-replayed
-> against daily closes. Dividends, credit interest, fees, withholding tax and FX
-> moves on non-USD cash are **not** included, because a trades-only Flex Query
-> doesn't report them. The **Total %** column divides the year's P&L by the gross
-> *position* value at the prior year-end — not by net liquidation value, and not
-> time-weighted. TWS's "Total return this year" is a time-weighted return on NAV
-> that neutralises deposits and withdrawals, so the two will not agree — expect a
-> gap whenever the account earns income or is funded mid-year.
+> against daily closes. Positions quoted in a currency other than
+> `IB_BASE_CURRENCY` are converted at each day's rate before being summed, so a
+> lot opened and closed at different rates realises its FX move too.
+>
+> **Not** included: dividends, credit interest, fees, withholding tax, and FX on
+> cash balances — a trades-only Flex Query doesn't report them. The **Total %**
+> column divides the year's P&L by the gross *position* value at the prior
+> year-end — not by net liquidation value, and not time-weighted. TWS's "Total
+> return this year" is a time-weighted return on NAV that neutralises deposits
+> and withdrawals, so the two will not match exactly — expect a small gap
+> whenever the account earns income or is funded mid-year.
 
 ### Compare (`/compare`)
 

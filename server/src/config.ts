@@ -42,6 +42,13 @@ export const config = {
    * comma-separated list of query ids (one per custom year range); their trades
    * are merged and de-duplicated.
    */
+  /**
+   * The account's base currency — what IB reports balances in. P&L on
+   * instruments quoted in anything else is converted into it before being
+   * summed into account totals.
+   */
+  baseCurrency: (process.env.IB_BASE_CURRENCY ?? "USD").toUpperCase(),
+
   flex: {
     token: process.env.IB_FLEX_TOKEN ?? "",
     queryIds: (process.env.IB_FLEX_QUERY_ID ?? "")
