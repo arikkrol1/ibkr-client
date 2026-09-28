@@ -44,7 +44,7 @@ async function resolvePair(
   }
 }
 
-function lookup(sorted: HistoryBar[], invert: boolean): FxRates {
+export function lookup(sorted: HistoryBar[], invert: boolean): FxRates {
   return {
     at(time: number): number {
       // Step-forward: the last close at or before `time`, else the earliest.

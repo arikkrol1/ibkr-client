@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { api, type HistoryBar, type HistoryResponse, type SymbolMatch } from "../api";
+import { api, type HistoryResponse, type SymbolMatch } from "../api";
 import { CompareChart, type CompareMode } from "../components/CompareChart";
 import { SymbolSearch } from "../components/SymbolSearch";
 import { SymbolTip } from "../components/SymbolTip";
 import { fmtPct, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
+import { windowPct } from "../utils/returns";
 
 interface Timeframe {
   key: string;
@@ -54,18 +55,6 @@ const CURATED_GROUPS: { group: string; symbols: string[] }[] = [
   { group: "Commodities / crypto / bonds", symbols: ["GLD", "SLV", "USO", "TLT"] },
 ];
 const CURATED_SYMBOLS = CURATED_GROUPS.flatMap((g) => g.symbols);
-
-/** % change over the timeframe window, measured against the prior close. */
-function windowPct(bars: HistoryBar[], startSec: number): number | undefined {
-  let idx = bars.findIndex((b) => b.time >= startSec);
-  if (idx === -1) idx = bars.length;
-  const w = bars.slice(Math.max(0, idx - 1));
-  const base = w[0]?.close;
-  const last = w[w.length - 1]?.close;
-  return base != null && last != null && base !== 0
-    ? ((last - base) / Math.abs(base)) * 100
-    : undefined;
-}
 
 const MODES: { key: CompareMode; label: string }[] = [
   { key: "pct", label: "% Change" },

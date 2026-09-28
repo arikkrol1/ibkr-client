@@ -78,7 +78,7 @@ function now(): number {
  * IB ignores formatDate=2 for daily-and-larger bars and returns "yyyymmdd"
  * strings; intraday bars come back as epoch seconds. Normalize to epoch.
  */
-function barTime(raw: string | number): number {
+export function barTime(raw: string | number): number {
   const s = String(raw).trim();
   if (/^\d{8}$/.test(s)) {
     return Date.UTC(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8))) / 1000;
@@ -125,7 +125,7 @@ async function requestBars(p: HistoryParams): Promise<HistoryBar[]> {
 const headTimeCache = new Map<string, number>();
 
 /** Parse IB's head-timestamp string: epoch seconds or "yyyymmdd[-hh:mm:ss]". */
-function parseIbTime(raw: string): number | undefined {
+export function parseIbTime(raw: string): number | undefined {
   const s = String(raw).trim();
   if (/^\d{9,}$/.test(s)) return Number(s);
   const m = /^(\d{4})(\d{2})(\d{2})/.exec(s);
@@ -157,7 +157,7 @@ async function getHeadTime(contract: Contract, useRTH: boolean): Promise<number 
  * Duration covering exactly the contract's available history, or undefined
  * when the requested duration already fits (no clamp needed).
  */
-function clampedDuration(requested: string, headTime: number): string | undefined {
+export function clampedDuration(requested: string, headTime: number): string | undefined {
   const availableSec = Math.floor(Date.now() / 1000) - headTime;
   if (availableSec <= 0 || durationSeconds(requested) <= availableSec) return undefined;
   const days = Math.max(1, Math.ceil(availableSec / 86_400));
@@ -184,12 +184,12 @@ async function fetchFromIb(p: HistoryParams): Promise<HistoryBar[]> {
 
 const BARS_REFETCH_MS = 6 * 3600_000;
 
-function contractKeyOf(c: Contract): string {
+export function contractKeyOf(c: Contract): string {
   return c.conId != null ? String(c.conId) : `${c.symbol}:${c.currency}:${c.exchange}`;
 }
 
 /** Approximate seconds covered by an IBKR duration string ("90 D", "2 Y", …). */
-function durationSeconds(duration: string): number {
+export function durationSeconds(duration: string): number {
   const m = /^(\d+)\s*([SDWMY])/i.exec(duration.trim());
   if (!m) return 0;
   const mult: Record<string, number> = {

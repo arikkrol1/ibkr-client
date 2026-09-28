@@ -134,7 +134,7 @@ async function fetchText(url: string): Promise<string> {
 }
 
 /** Parse Flex dateTime formats: "yyyyMMdd;HHmmss", "yyyy-MM-dd;HH:mm:ss", "yyyyMMdd". */
-function parseFlexTime(raw: string | undefined): number | undefined {
+export function parseFlexTime(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
   const digits = String(raw).replace(/[^0-9]/g, "");
   if (digits.length < 8) return undefined;
@@ -197,7 +197,7 @@ function toTrade(a: Record<string, string>): (FlexTrade & { detail?: string }) |
   };
 }
 
-function tradeKeyOf(t: FlexTrade): string {
+export function tradeKeyOf(t: FlexTrade): string {
   return t.tradeId ?? `${t.conId ?? t.symbol}|${t.time}|${t.quantity}|${t.price}`;
 }
 

@@ -88,13 +88,13 @@ const PRICE_SPLIT_TOL = 0.05;
 const QTY_SPLIT_TOL = 0.01;
 
 /** Map a day span onto an IBKR duration string. */
-function toDuration(days: number): string {
+export function toDuration(days: number): string {
   if (days <= 365) return `${Math.max(days, 1)} D`;
   return `${Math.ceil(days / 365)} Y`;
 }
 
 /** Run tasks with bounded concurrency (IBKR historical-data pacing). */
-async function mapLimit<T, R>(
+export async function mapLimit<T, R>(
   items: T[],
   limit: number,
   fn: (item: T) => Promise<R>,
@@ -164,7 +164,7 @@ function marketValueAt(state: ReplayState, close: number, multiplier: number): n
  * Replay a symbol's trades against its daily closes, producing the cumulative
  * (realized + unrealized) P&L at the end of each day.
  */
-function replaySeries(trades: FlexTrade[], bars: HistoryBar[]): {
+export function replaySeries(trades: FlexTrade[], bars: HistoryBar[]): {
   points: PnlPoint[];
   realized: number;
   unrealized: number;
@@ -210,7 +210,7 @@ function replaySeries(trades: FlexTrade[], bars: HistoryBar[]): {
  * steps at each closing trade rather than carrying the final total from the
  * first point, so a realized loss lands in the month it was actually taken.
  */
-function flatSeries(trades: FlexTrade[], startTime: number, endTime: number): {
+export function flatSeries(trades: FlexTrade[], startTime: number, endTime: number): {
   points: PnlPoint[];
   realized: number;
   unrealized: number;
@@ -242,7 +242,7 @@ function flatSeries(trades: FlexTrade[], startTime: number, endTime: number): {
  * splits its reciprocal; anything else (a fill a few % off the day's close, an
  * odd 3-for-2 ratio) is left alone rather than guessed at.
  */
-function splitFactor(ratio: number, tol: number): number {
+export function splitFactor(ratio: number, tol: number): number {
   if (!Number.isFinite(ratio) || ratio <= 0) return 1;
   const fwd = Math.round(ratio);
   if (fwd >= 2 && fwd <= MAX_SPLIT && Math.abs(ratio - fwd) <= tol * fwd) return fwd;
@@ -263,7 +263,7 @@ function splitFactor(ratio: number, tol: number): number {
  * P&L forever. Realized $ amounts are unchanged (quantity × price is
  * invariant), only their timing and the share counts in between.
  */
-function rescaleSplits(trades: FlexTrade[], bars: HistoryBar[], symbol: string): void {
+export function rescaleSplits(trades: FlexTrade[], bars: HistoryBar[], symbol: string): void {
   if (bars.length === 0) return;
   let b = 0;
   for (const t of trades) {
@@ -289,7 +289,7 @@ function rescaleSplits(trades: FlexTrade[], bars: HistoryBar[], symbol: string):
  * the earliest window are missing (or under-counted) in the replay. Seed the
  * unexplained quantity with a synthetic opening lot at IB's blended avg cost.
  */
-function seedMissing(
+export function seedMissing(
   group: FlexTrade[],
   p: PortfolioPosition,
   startTime: number,
@@ -335,7 +335,7 @@ function seedMissing(
  * replay runs natively in base: a lot opened at one rate and closed at another
  * realizes the FX move too, which is what actually happened to the account.
  */
-function toBaseCurrency(
+export function toBaseCurrency(
   trades: FlexTrade[],
   bars: HistoryBar[],
   rates: FxRates,

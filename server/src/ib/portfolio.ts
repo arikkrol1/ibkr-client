@@ -49,7 +49,7 @@ function firstReady<T>(obs: Observable<T>, ready: (v: T) => boolean, ms: number)
  * goes quiet for `quietMs` (the download burst has finished). `maxMs` caps the
  * wait and, on timeout, returns the latest emission we saw rather than throwing.
  */
-function settleWhenComplete<T>(
+export function settleWhenComplete<T>(
   obs: Observable<T>,
   gate: (v: T) => boolean,
   complete: (v: T) => boolean,
@@ -75,7 +75,7 @@ function settleWhenComplete<T>(
   );
 }
 
-function numTag(
+export function numTag(
   values: ReadonlyMap<string, ReadonlyMap<string, { value: string }>> | undefined,
   ...tags: string[]
 ): number | undefined {
@@ -96,7 +96,7 @@ function numTag(
 }
 
 /** Sum of absolute market values across non-zero position rows. */
-function sumAbsMarketValue(
+export function sumAbsMarketValue(
   portfolio: ReadonlyMap<string, ReadonlyArray<{ pos?: number; marketValue?: number }>> | undefined,
 ): number {
   if (!portfolio) return 0;

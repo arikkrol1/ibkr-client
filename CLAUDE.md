@@ -15,4 +15,9 @@ before considering the task done. If a tab's look changes noticeably, refresh
 its `docs/screenshots/*.png` (synthetic demo data only). See `AGENTS.md` for the
 full checklist.
 
+**Any behaviour change must add or update unit tests in the same change**, and
+`pnpm test` must pass before the task is done. Tests are Vitest, colocated as
+`*.test.ts`; keep pure logic out of React components so it can be tested. See
+`AGENTS.md` → "Keep unit tests in lockstep with the code".
+
 This client is **read-only** — never add order-placing capability.

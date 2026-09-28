@@ -10,7 +10,8 @@
     "dev:server": "pnpm --filter server dev",
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm --filter server build && pnpm --filter web build",
-    "start": "pnpm --filter server start"
+    "start": "pnpm --filter server start",
+    "test": "pnpm -r test"
   },
   "engines": {
     "node": ">=20"

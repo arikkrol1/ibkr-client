@@ -112,6 +112,10 @@ pnpm dev:web          # UI on http://127.0.0.1:5173  (proxies /api + /ws to back
 # …or production single-origin:
 pnpm build
 pnpm start            # serves API + built UI on http://127.0.0.1:4010
+
+# Unit tests (Vitest, both packages — no IB Gateway needed):
+pnpm test
+pnpm --filter server test:watch   # or: pnpm --filter web test:watch
 ```
 
 Open **http://127.0.0.1:5173** (dev) or **http://127.0.0.1:4010** (prod).
@@ -271,6 +275,12 @@ A grid of ETF-proxy mini-charts for a quick market read.
 
 ## 6. Verify end-to-end
 
+`pnpm test` covers the logic offline: Flex XML parsing, the FIFO P&L replay
+and split/FX handling, storage, IB pacing, API routes (including a guard that
+no order-placing route exists), and the P&L / Compare math behind the UI. It
+mocks IB and uses an in-memory SQLite database, so it never touches a real
+account.
+
 With IB Gateway running + logged in:
 
 ```bash
@@ -301,3 +311,6 @@ never place orders.
 **Docs stay in lockstep with the UI:** any change to a tab, view, or user-facing
 control must update this README in the same change (see `AGENTS.md` /
 `CLAUDE.md`).
+
+**Tests stay in lockstep with the code:** any behaviour change adds or updates
+unit tests next to the module (`*.test.ts`), and `pnpm test` must pass.

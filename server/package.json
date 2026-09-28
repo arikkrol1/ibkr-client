@@ -8,8 +8,10 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "import:flex": "tsx src/scripts/import-flex.ts"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "import:flex": "tsx src/scripts/import-flex.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -24,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^22.10.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
   }
 }
