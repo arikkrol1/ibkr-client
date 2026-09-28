@@ -27,7 +27,7 @@ Gateway/TWS and the IBKR Flex web service — no third-party servers, no telemet
 
 ## Prerequisites
 
-- **Node.js ≥ 20** and **[pnpm](https://pnpm.io/)** (`npm install -g pnpm`).
+- **Node.js ≥ 22.13** (the server uses the built-in `node:sqlite`) and **[pnpm](https://pnpm.io/)** (`npm install -g pnpm`).
 - **An Interactive Brokers account.**
 - **IB Gateway** (recommended) or **Trader Workstation (TWS)** installed and
   logged in. There is no gateway-less path for retail accounts — the backend
@@ -305,8 +305,11 @@ web/      React + Vite frontend — one page component per tab under src/pages
 
 ## Contributing
 
-Issues and PRs welcome. Please keep the read-only scope intact — this app must
-never place orders.
+Issues and PRs welcome — fork the repo and open a pull request against `main`;
+only the maintainer merges. CI (`.github/workflows/ci.yml`) typechecks both
+packages and runs `pnpm test` on every PR. Please keep the read-only scope
+intact — this app must never place orders, and PRs adding order placement
+won't be accepted.
 
 **Docs stay in lockstep with the UI:** any change to a tab, view, or user-facing
 control must update this README in the same change (see `AGENTS.md` /
@@ -314,3 +317,7 @@ control must update this README in the same change (see `AGENTS.md` /
 
 **Tests stay in lockstep with the code:** any behaviour change adds or updates
 unit tests next to the module (`*.test.ts`), and `pnpm test` must pass.
+
+## License
+
+[MIT](LICENSE)
