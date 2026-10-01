@@ -40,6 +40,10 @@ export function PriceChart({ bars }: Props) {
       },
       rightPriceScale: { borderColor: "#374151" },
       timeScale: { borderColor: "#374151", timeVisible: true, secondsVisible: false },
+      // Static view: no wheel/drag panning or zooming, so the mouse wheel
+      // scrolls the page instead of being captured by the chart.
+      handleScroll: false,
+      handleScale: false,
       autoSize: true,
     });
 

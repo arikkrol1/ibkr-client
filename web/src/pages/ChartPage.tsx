@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type SymbolMatch } from "../api";
 import { SymbolSearch } from "../components/SymbolSearch";
 import { PriceChart } from "../components/PriceChart";
-import { RecentCharts, recentKey } from "../components/RecentCharts";
+import { RecentCharts } from "../components/RecentCharts";
 import { useQuote } from "../hooks/useQuote";
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from "../utils/format";
+import { loadRecents, pushRecent, recentKey, saveRecents } from "../utils/recentCharts";
 
 const PRESETS = [
   { label: "1D", barSize: "5 mins", duration: "1 D" },
@@ -17,8 +18,6 @@ const PRESETS = [
   { label: "5Y", barSize: "1 week", duration: "5 Y" },
   { label: "10Y", barSize: "1 week", duration: "10 Y" },
 ] as const;
-
-const MAX_RECENTS = 10;
 
 export function ChartPage() {
   // Seed the selection from ?symbol=&conId= so other tabs (e.g. the Holdings
@@ -34,17 +33,14 @@ export function ChartPage() {
   const [presetIdx, setPresetIdx] = useState(3); // 6M
   const preset = PRESETS[presetIdx];
 
-  // Keep the last N inspected symbols, newest first, deduped by identity.
-  const [recents, setRecents] = useState<SymbolMatch[]>([]);
+  // Keep the last N inspected symbols, newest first, deduped by identity, and
+  // persist them in localStorage so they survive reloads.
+  const [recents, setRecents] = useState<SymbolMatch[]>(() => loadRecents());
   useEffect(() => {
     if (!selected?.symbol) return;
-    setRecents((prev) => {
-      const key = recentKey(selected);
-      const next = prev.filter((m) => recentKey(m) !== key);
-      next.unshift(selected);
-      return next.slice(0, MAX_RECENTS);
-    });
+    setRecents((prev) => pushRecent(prev, selected));
   }, [selected]);
+  useEffect(() => saveRecents(recents), [recents]);
 
   const symbol = selected?.symbol ?? null;
   const quote = useQuote(symbol);

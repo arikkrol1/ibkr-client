@@ -267,8 +267,13 @@ A single-symbol candlestick chart with a live quote header.
   a **DELAYED** badge when applicable.
 - **Timeframe presets:** 1D / 1W / 1M / 6M / 1Y / 5Y / 10Y (bar size scales with
   the range).
-- **Recently viewed:** a strip of the last 10 inspected symbols (newest first)
-  as compact sparklines below the main chart — click one to reopen it.
+- The main chart is a fixed view of the selected range — no mouse-wheel or drag
+  panning/zooming, so scrolling over it scrolls the page.
+- **Recently viewed:** a strip of the last 20 inspected symbols (newest first)
+  as compact sparklines below the main chart — click one (pointer cursor) to
+  reopen it. The list
+  is saved in the browser's `localStorage`, so it survives page reloads and
+  restarts (per browser; clearing site data resets it).
 
 ### Sectors (`/sectors`)
 

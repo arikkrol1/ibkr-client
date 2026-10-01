@@ -2,11 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type SymbolMatch } from "../api";
 import { MiniAreaChart } from "./MiniAreaChart";
 import { fmtNum, fmtPct, pnlColor } from "../utils/format";
-
-/** Stable identity for a viewed symbol (conId when known, else the ticker). */
-export function recentKey(m: SymbolMatch): string {
-  return String(m.conId ?? m.symbol ?? "");
-}
+import { recentKey } from "../utils/recentCharts";
 
 /**
  * Strip of the most-recently-inspected symbols, newest first, as compact 6-month
@@ -76,7 +72,7 @@ function RecentCard({
     <button
       onClick={() => onSelect(match)}
       title={match.name}
-      className={`rounded-xl border bg-gray-900/40 p-3 text-left transition-colors ${
+      className={`cursor-pointer rounded-xl border bg-gray-900/40 p-3 text-left transition-colors [&_canvas]:cursor-pointer! ${
         active
           ? "border-emerald-600/70 bg-emerald-950/20"
           : "border-gray-800 hover:border-gray-600"
