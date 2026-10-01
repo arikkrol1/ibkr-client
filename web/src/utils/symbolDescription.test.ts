@@ -25,6 +25,15 @@ describe("describe (symbol tooltip line)", () => {
     expect(describeSymbol({ symbol: "CIBR", secType: "STK", stockType: "ETF" })).toBe(
       "ETF · Cybersecurity / software security stocks",
     );
+    expect(describeSymbol({ symbol: "IYW", secType: "STK", stockType: "ETF" })).toBe(
+      "ETF · US technology stocks (Dow Jones)",
+    );
+    expect(describeSymbol({ symbol: "XLC", secType: "STK", stockType: "ETF" })).toBe(
+      "ETF · S&P 500 communication services sector",
+    );
+    expect(describeSymbol({ symbol: "IBB", secType: "STK", stockType: "ETF" })).toBe(
+      "ETF · Nasdaq biotechnology stocks",
+    );
   });
 
   it("falls back to the bare asset type", () => {

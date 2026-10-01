@@ -33,11 +33,14 @@ const SECTORS: Instrument[] = [
   { symbol: "ARKX", name: "Space Exploration" },
   { symbol: "QTUM", name: "Quantum Computing" },
   { symbol: "XLK", name: "Technology" },
+  { symbol: "IYW", name: "US Technology" },
   { symbol: "IGV", name: "Software" },
   { symbol: "CIBR", name: "Software Security" },
+  { symbol: "XLC", name: "Communication Services" },
   { symbol: "XLE", name: "Energy" },
   { symbol: "XLF", name: "Financials" },
   { symbol: "XBI", name: "Biotech" },
+  { symbol: "IBB", name: "Biotechnology" },
 ];
 
 export function SectorsPage() {

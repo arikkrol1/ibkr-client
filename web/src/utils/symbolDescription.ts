@@ -17,6 +17,7 @@ export const ETF_DESCRIPTIONS: Record<string, string> = {
   EFA: "Developed-market equities ex-US",
   EEM: "Emerging-market equities",
   XLK: "S&P 500 technology sector",
+  XLC: "S&P 500 communication services sector",
   XLE: "S&P 500 energy sector",
   XLF: "S&P 500 financials sector",
   XLV: "S&P 500 health care sector",
@@ -31,6 +32,8 @@ export const ETF_DESCRIPTIONS: Record<string, string> = {
   QTUM: "Quantum computing & machine learning stocks",
   IGV: "North American software stocks",
   CIBR: "Cybersecurity / software security stocks",
+  IYW: "US technology stocks (Dow Jones)",
+  IBB: "Nasdaq biotechnology stocks",
 };
 
 /** "ETF · Physical gold bullion" / "Stock · Technology · Computers" style line. */
