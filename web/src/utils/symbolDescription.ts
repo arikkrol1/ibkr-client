@@ -29,6 +29,8 @@ export const ETF_DESCRIPTIONS: Record<string, string> = {
   ITA: "US aerospace & defense stocks",
   IBIT: "Spot Bitcoin",
   QTUM: "Quantum computing & machine learning stocks",
+  IGV: "North American software stocks",
+  CIBR: "Cybersecurity / software security stocks",
 };
 
 /** "ETF · Physical gold bullion" / "Stock · Technology · Computers" style line. */

@@ -277,7 +277,7 @@ A single-symbol candlestick chart with a live quote header.
 A grid of ETF-proxy mini-charts for a quick market read.
 - **Indexes:** SPY, QQQ, DIA, IWM.
 - **Sectors:** semiconductors, aerospace & defense, space, quantum, technology,
-  energy, financials, biotech.
+  software (IGV), software security (CIBR), energy, financials, biotech.
 - Each card shows last price and % change over the selected range
   (**1D → 1Y**), tinted green/red by direction.
 

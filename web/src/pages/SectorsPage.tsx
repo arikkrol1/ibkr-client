@@ -33,6 +33,8 @@ const SECTORS: Instrument[] = [
   { symbol: "ARKX", name: "Space Exploration" },
   { symbol: "QTUM", name: "Quantum Computing" },
   { symbol: "XLK", name: "Technology" },
+  { symbol: "IGV", name: "Software" },
+  { symbol: "CIBR", name: "Software Security" },
   { symbol: "XLE", name: "Energy" },
   { symbol: "XLF", name: "Financials" },
   { symbol: "XBI", name: "Biotech" },

@@ -22,6 +22,9 @@ describe("describe (symbol tooltip line)", () => {
     expect(describeSymbol({ symbol: "GLD", secType: "STK", stockType: "ETF", industry: "Funds" })).toBe(
       "ETF · Physical gold bullion",
     );
+    expect(describeSymbol({ symbol: "CIBR", secType: "STK", stockType: "ETF" })).toBe(
+      "ETF · Cybersecurity / software security stocks",
+    );
   });
 
   it("falls back to the bare asset type", () => {
