@@ -135,6 +135,41 @@ export interface PnlHistory {
   refreshing?: boolean;
 }
 
+export interface ActivityTrade {
+  /** Execution time, UNIX seconds. */
+  time: number;
+  side: "buy" | "sell";
+  /** Absolute share count, split-adjusted to match the bars. */
+  quantity: number;
+  /** Fill price, split-adjusted to match the bars. */
+  price: number;
+}
+
+export interface SymbolActivity {
+  symbol: string;
+  conId?: number;
+  currency?: string;
+  /** Every buy/sell, oldest first. */
+  trades: ActivityTrade[];
+  /** The most recent fill. */
+  last: ActivityTrade;
+  /** Shares held now (signed; 0 when closed). */
+  position: number;
+  /** True while a position is still held. */
+  open: boolean;
+  /** Daily bars covering at least the whole trade history. */
+  bars: HistoryBar[];
+  /** Set when the bars couldn't be fetched. */
+  error?: string;
+}
+
+export interface Activity {
+  /** Newest last activity first. */
+  symbols: SymbolActivity[];
+  /** Epoch ms of the last successful trade-history fetch. */
+  tradesAsOf?: number;
+}
+
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
@@ -164,6 +199,7 @@ export const api = {
   },
   portfolio: () => getJSON<Portfolio>("/api/portfolio"),
   pnl: (days: number) => getJSON<PnlHistory>(`/api/pnl?days=${days}`),
+  activity: () => getJSON<Activity>("/api/activity"),
   pnlRefresh: async (): Promise<{ ok: boolean; tradesAsOf?: number }> => {
     const res = await fetch("/api/pnl/refresh", { method: "POST" });
     if (!res.ok) {

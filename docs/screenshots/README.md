@@ -12,6 +12,7 @@ documented in the root README) and capture each tab at ~1360px wide:
 
 - `dashboard.png` — `/`
 - `pnl.png` — `/pnl`
+- `activity.png` — `/activity` (not captured yet)
 - `compare.png` — `/compare` (with the holdings added to the chart)
 - `charts.png` — `/chart` (with a symbol selected, e.g. AAPL)
 - `sectors.png` — `/sectors`

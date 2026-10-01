@@ -12,6 +12,7 @@ import { registerMarketRoutes } from "./routes/market.js";
 import { registerQuoteRoutes } from "./routes/quotes.js";
 import { registerPortfolioRoutes } from "./routes/portfolio.js";
 import { registerPnlRoutes } from "./routes/pnl.js";
+import { registerActivityRoutes } from "./routes/activity.js";
 
 async function main() {
   const app = Fastify({ logger: { level: "warn" } });
@@ -25,6 +26,7 @@ async function main() {
   await app.register(registerQuoteRoutes);
   await app.register(registerPortfolioRoutes);
   await app.register(registerPnlRoutes);
+  await app.register(registerActivityRoutes);
 
   // Serve the built frontend in production (single origin). In dev, Vite serves it.
   const webDist = join(dirname(fileURLToPath(import.meta.url)), "../../web/dist");

@@ -151,7 +151,7 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 
 ## 4. The UI — tabs & views
 
-The app is a single dark dashboard with five tabs (top nav). Prices/charts badge
+The app is a single dark dashboard with six tabs (top nav). Prices/charts badge
 as **DELAYED** when the account lacks a realtime subscription.
 
 ### Dashboard (`/`)
@@ -221,6 +221,29 @@ Realized **and** unrealized P&L over time, built from your full trade history
 > **Backfilling** under [Prerequisites](#1-prerequisites) for importing yearly
 > statements.
 
+### Activity (`/activity`)
+
+*(no screenshot yet)*
+
+One price chart per stock you have ever bought or sold — including positions
+you've since closed — built from the Flex trade history (FX conversions are
+left out). Cards are ordered by **last activity date, newest first**. A short
+description under the heading explains the view and its line/marker colors.
+- **Last-activity line:** a horizontal line at the price of the symbol's most
+  recent fill — **green** if it was a buy, **red** if it was a sell — labelled
+  on the price axis. The price scale always stretches to keep it visible.
+- **Trade markers:** a green ▲ / red ▼ at the fill price of every earlier buy
+  and sell in the visible window; hover a day to see its fills.
+- **Card header:** an **OPEN · _shares_** / **CLOSED** badge (from IB's live
+  positions), the last fill (side, shares, price, date), the latest price, and
+  the % move since that fill. A 🔍 magnifier opens the symbol in **Charts**.
+- **Filters:** **All / Open / Closed** position status.
+- **Timeframes:** 1D / 1W / 1M / 3M / 6M / YTD / **1Y** (default) / 3Y / All,
+  shared by every card. **1D** uses 5-min bars (auto-refreshed) and **1W**
+  hourly bars; the rest use daily bars.
+- Fills that predate a stock split are rescaled onto the split-adjusted price
+  history, so old trades sit on the chart where they actually happened.
+
 ### Compare (`/compare`)
 
 ![Compare tab](docs/screenshots/compare.png)
@@ -269,6 +292,7 @@ A grid of ETF-proxy mini-charts for a quick market read.
 - `GET /api/portfolio` — positions, balances, PnL
 - `GET /api/pnl?days=90` — realized/unrealized P&L series per symbol
 - `POST /api/pnl/refresh` — force a Flex trade re-fetch
+- `GET /api/activity` — every traded stock with its fills, daily bars and open/closed position, newest activity first
 - `WS  /ws/quotes` — send `{"type":"subscribe","symbol":"AAPL"}`; receive `{type:"quote",…}`
 
 ---

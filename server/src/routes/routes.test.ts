@@ -16,6 +16,9 @@ vi.mock("../ib/flex.js", () => ({
   getFlexTrades: vi.fn(async () => []),
   tradesAsOf: vi.fn(async () => 123),
 }));
+vi.mock("../ib/activity.js", () => ({
+  getActivity: vi.fn(async () => ({ symbols: [], tradesAsOf: 123 })),
+}));
 vi.mock("../ib/portfolio.js", () => ({
   getPortfolio: vi.fn(async () => ({ account: "U1", balances: {}, positions: [] })),
 }));
@@ -39,6 +42,7 @@ import { getHistory, streamQuote, type Quote } from "../ib/marketData.js";
 import { registerHealthRoutes } from "./health.js";
 import { registerMarketRoutes } from "./market.js";
 import { registerPnlRoutes } from "./pnl.js";
+import { registerActivityRoutes } from "./activity.js";
 import { registerPortfolioRoutes } from "./portfolio.js";
 import { registerQuoteRoutes } from "./quotes.js";
 
@@ -58,6 +62,7 @@ beforeEach(async () => {
   await app.register(registerQuoteRoutes);
   await app.register(registerPortfolioRoutes);
   await app.register(registerPnlRoutes);
+  await app.register(registerActivityRoutes);
   await app.ready();
 });
 
@@ -82,7 +87,7 @@ describe("GET /api/health", () => {
 });
 
 describe("IB-backed routes", () => {
-  it.each(["/api/pnl", "/api/portfolio", "/api/search?q=a", "/api/history?symbol=A", "/api/symbol-info?symbol=A"])(
+  it.each(["/api/pnl", "/api/activity", "/api/portfolio", "/api/search?q=a", "/api/history?symbol=A", "/api/symbol-info?symbol=A"])(
     "%s returns 503 while disconnected",
     async (url) => {
       ibMock.isConnected = false;
@@ -113,6 +118,13 @@ describe("POST /api/pnl/refresh", () => {
     expect(res.json()).toEqual({ ok: true, tradesAsOf: 123 });
     expect(getFlexTrades).toHaveBeenCalledWith({ force: true });
     expect(invalidatePnlCache).toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/activity", () => {
+  it("returns the per-symbol activity", async () => {
+    const res = await app.inject("/api/activity");
+    expect(res.json()).toEqual({ symbols: [], tradesAsOf: 123 });
   });
 });
 
