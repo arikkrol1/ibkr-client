@@ -7,39 +7,8 @@ import { SymbolTip } from "../components/SymbolTip";
 import { fmtPct, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 import { windowPct } from "../utils/returns";
+import { COMPARE_TIMEFRAMES as TIMEFRAMES, TF_MONTH } from "../utils/timeframes";
 
-interface Timeframe {
-  key: string;
-  label: string;
-  start: (now: Date) => Date;
-  /**
-   * IBKR duration to fetch (default "1 Y"). Daily bars are served back to
-   * the instrument's inception when the ask exceeds available history.
-   */
-  duration?: string;
-}
-
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-const TIMEFRAMES: Timeframe[] = [
-  { key: "week", label: "Week", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 7) },
-  { key: "month", label: "Month", start: (n) => new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()) },
-  { key: "year", label: "Year", start: (n) => new Date(n.getFullYear() - 1, n.getMonth(), n.getDate()) },
-  { key: "5y", label: "5Y", start: (n) => new Date(n.getFullYear() - 5, n.getMonth(), n.getDate()), duration: "5 Y" },
-  { key: "10y", label: "10Y", start: (n) => new Date(n.getFullYear() - 10, n.getMonth(), n.getDate()), duration: "10 Y" },
-  { key: "max", label: "Max", start: () => new Date(0), duration: "50 Y" },
-  {
-    key: "wtd",
-    label: "WTD",
-    start: (n) => {
-      const d = startOfDay(n);
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
-      return d;
-    },
-  },
-  { key: "mtd", label: "MTD", start: (n) => new Date(n.getFullYear(), n.getMonth(), 1) },
-  { key: "ytd", label: "YTD", start: (n) => new Date(n.getFullYear(), 0, 1) },
-];
 
 /**
  * Curated benchmark universe for the Top performers selector: liquid,
@@ -85,7 +54,7 @@ export function ComparePage() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [showTop, setShowTop] = useState(false);
 
-  const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[1];
+  const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TF_MONTH;
   const startSec = useMemo(() => Math.floor(tf.start(new Date()).getTime() / 1000), [tf]);
   const duration = tf.duration ?? "1 Y";
 

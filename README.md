@@ -168,7 +168,7 @@ A live snapshot of the account, polling every 10 seconds.
   market value, unrealized P&L, and % return.
 - **Allocation:** a breakdown of portfolio weight by holding.
 - **Per-holding charts:** a small price chart per position, with
-  Day / Week / Month / Year / WTD / MTD / YTD timeframes. **Day** shows live
+  Day / Week / Month / 3M / 6M / Year / WTD / MTD / YTD timeframes. **Day** shows live
   intraday movement (5-min bars, auto-refreshed). Each card has a 🔍 magnifier
   that opens that symbol in the **Charts** tab.
 
@@ -185,7 +185,8 @@ Realized **and** unrealized P&L over time, built from your full trade history
   (**1D → 5Y**). Clicking a legend chip toggles a symbol; *Remove all / Add all*
   toggles the whole set.
 - **Cumulative P&L chart:** one line per symbol over the selected range.
-- **P&L % by symbol:** percentage return per symbol across timeframes.
+- **P&L % by symbol:** percentage return per symbol across timeframes
+  (Year / 6M / 3M / Month / Week / Day / YTD / MTD / WTD).
 - **Per-symbol breakdown:** a table of realized / unrealized / total P&L.
 - **Yearly Breakdown:** diverging bars of P&L per year.
 - **Yearly vs SPY:** the portfolio's yearly return compared against SPY, matched
@@ -250,7 +251,7 @@ description under the heading explains the view and its line/marker colors.
 
 Overlay multiple symbols on one chart over a shared timeframe.
 - **Modes:** **% Change** (rebased to the window start) or raw **Price**.
-- **Timeframes:** Week / Month / Year / 5Y / 10Y / Max, plus WTD / MTD / YTD.
+- **Timeframes:** Week / Month / 3M / 6M / Year / 5Y / 10Y / Max, plus WTD / MTD / YTD.
 - **Adding symbols:** search any ticker, one-click **Holdings** chips to add your
   positions, or expand **Top performers** to rank a curated cross-asset universe
   (broad-market/sector ETFs, megacap tech, large caps, commodities/crypto/bonds)
@@ -265,7 +266,7 @@ A single-symbol candlestick chart with a live quote header.
 - **Search** any ticker to load it.
 - **Quote header:** last price, change and % change, bid / ask / high / low, and
   a **DELAYED** badge when applicable.
-- **Timeframe presets:** 1D / 1W / 1M / 6M / 1Y / 5Y / 10Y (bar size scales with
+- **Timeframe presets:** 1D / 1W / 1M / 3M / 6M / 1Y / 5Y / 10Y (bar size scales with
   the range).
 - The main chart is a fixed view of the selected range — no mouse-wheel or drag
   panning/zooming, so scrolling over it scrolls the page.

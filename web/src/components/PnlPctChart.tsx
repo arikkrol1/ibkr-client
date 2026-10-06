@@ -2,33 +2,8 @@ import { useMemo, useState } from "react";
 import type { PnlSeries } from "../api";
 import { fmtMoney, fmtPct, pnlColor } from "../utils/format";
 import { rowsFor } from "../utils/pctRows";
+import { PNL_PCT_TIMEFRAMES as TIMEFRAMES, TF_MONTH } from "../utils/timeframes";
 
-interface Timeframe {
-  key: string;
-  label: string;
-  start: (now: Date) => Date;
-}
-
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-const TIMEFRAMES: Timeframe[] = [
-  { key: "year", label: "Year", start: (n) => new Date(n.getFullYear() - 1, n.getMonth(), n.getDate()) },
-  { key: "quarter", label: "3M", start: (n) => new Date(n.getFullYear(), n.getMonth() - 3, n.getDate()) },
-  { key: "month", label: "Month", start: (n) => new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()) },
-  { key: "week", label: "Week", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 7) },
-  { key: "day", label: "Day", start: (n) => new Date(n.getFullYear(), n.getMonth(), n.getDate() - 1) },
-  { key: "ytd", label: "YTD", start: (n) => new Date(n.getFullYear(), 0, 1) },
-  { key: "mtd", label: "MTD", start: (n) => new Date(n.getFullYear(), n.getMonth(), 1) },
-  {
-    key: "wtd",
-    label: "WTD",
-    start: (n) => {
-      const d = startOfDay(n);
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
-      return d;
-    },
-  },
-];
 
 /** Horizontal gain/loss bars: % P&L per symbol over a selectable timeframe. */
 export function PnlPctChart({
@@ -39,7 +14,7 @@ export function PnlPctChart({
   colorFor: (key: string) => string;
 }) {
   const [tfKey, setTfKey] = useState("month");
-  const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[1];
+  const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TF_MONTH;
 
   const rows = useMemo(
     () => rowsFor(series, tf.start(new Date()).getTime() / 1000),

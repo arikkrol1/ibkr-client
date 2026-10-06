@@ -8,16 +8,8 @@ import { RecentCharts } from "../components/RecentCharts";
 import { useQuote } from "../hooks/useQuote";
 import { fmtMoney, fmtNum, fmtPct, pnlColor } from "../utils/format";
 import { loadRecents, pushRecent, recentKey, saveRecents } from "../utils/recentCharts";
+import { CHART_PRESETS as PRESETS, DEFAULT_CHART_PRESET_IDX } from "../utils/timeframes";
 
-const PRESETS = [
-  { label: "1D", barSize: "5 mins", duration: "1 D" },
-  { label: "1W", barSize: "30 mins", duration: "1 W" },
-  { label: "1M", barSize: "1 day", duration: "1 M" },
-  { label: "6M", barSize: "1 day", duration: "6 M" },
-  { label: "1Y", barSize: "1 day", duration: "1 Y" },
-  { label: "5Y", barSize: "1 week", duration: "5 Y" },
-  { label: "10Y", barSize: "1 week", duration: "10 Y" },
-] as const;
 
 export function ChartPage() {
   // Seed the selection from ?symbol=&conId= so other tabs (e.g. the Holdings
@@ -30,7 +22,7 @@ export function ChartPage() {
     if (!symbol && !conId) return null;
     return { symbol, conId: conId ? Number(conId) : undefined, currency };
   });
-  const [presetIdx, setPresetIdx] = useState(3); // 6M
+  const [presetIdx, setPresetIdx] = useState(DEFAULT_CHART_PRESET_IDX);
   const preset = PRESETS[presetIdx];
 
   // Keep the last N inspected symbols, newest first, deduped by identity, and
