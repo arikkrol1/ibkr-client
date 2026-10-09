@@ -6,6 +6,7 @@ import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
 import { config } from "./config.js";
+import { corsOptions } from "./cors.js";
 import { ib } from "./ib/connection.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerMarketRoutes } from "./routes/market.js";
@@ -17,8 +18,8 @@ import { registerActivityRoutes } from "./routes/activity.js";
 async function main() {
   const app = Fastify({ logger: { level: "warn" } });
 
-  // localhost-only app; allow the Vite dev origin during development.
-  await app.register(cors, { origin: true });
+  // Only local dev origins get CORS headers (the UI is same-origin, incl. via ngrok).
+  await app.register(cors, corsOptions);
   await app.register(websocket);
 
   await app.register(registerHealthRoutes);

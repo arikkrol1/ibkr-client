@@ -10,3 +10,4 @@ server/dist/
 *.tsbuildinfo
 server/.data/
 historiacal-data/
+.ngrok/

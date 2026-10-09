@@ -56,7 +56,52 @@ TWS), log into your **live** account, then:
 > the account. Without one, set `IB_MARKET_DATA_TYPE=3` to use IBKR's delayed
 > feed — the UI clearly badges quotes/charts as **DELAYED**.
 
-> IB Gateway auto-restarts daily; the backend reconnects automatically.
+> The backend reconnects automatically whenever Gateway's API socket comes back
+> (e.g. after its daily restart). It can't log Gateway back in if the session is
+> lost or Gateway quits. For that, run Gateway under IBC (below).
+
+### (Recommended) IBC: auto-login & restart
+
+[IBC](https://github.com/IbcAlpha/IBC) launches IB Gateway, fills in the login,
+handles dialogs, and listens on a local command port. You can then restart
+Gateway without sitting at the Mac (you still approve the IB Key 2FA push on
+your phone for a cold start).
+
+1. Download the latest `IBCMacos-<ver>.zip` from the
+   [releases page](https://github.com/IbcAlpha/IBC/releases), unzip it to
+   `~/ibc`, then `chmod +x ~/ibc/*.sh ~/ibc/scripts/*.sh`.
+2. Edit `~/ibc/config.ini`, then run `chmod 600 ~/ibc/config.ini`. Credentials
+   live **only** here, never in this repo or `.env`:
+
+   | Key | Value | Why |
+   |---|---|---|
+   | `IbLoginId` / `IbPassword` | your login | lets IBC cold-start Gateway unattended (leave blank to type them in the dialog) |
+   | `TradingMode` | `live` | |
+   | `ReadOnlyApi` | `yes` | matches this app's read-only scope |
+   | `CommandServerPort` | `7462` | local command port (`RESTART`, `STOP`, …) |
+   | `BindAddress` / `ControlFrom` | `127.0.0.1` | command port is local-only |
+   | `AcceptIncomingConnectionAction` | `reject` | 127.0.0.1 is already a trusted IP; refuse anything else |
+   | `ExistingSessionDetectedAction` | `primary` | logging in from the IBKR phone app doesn't kick Gateway off for good |
+   | `ReloginAfterSecondFactorAuthenticationTimeout` | `yes` | retry if a 2FA push is missed |
+   | `AutoRestartTime` | e.g. `11:45 PM` | IBC-managed daily restart, no fresh 2FA |
+
+3. Edit `~/ibc/gatewaystartmacos.sh`:
+   - `TWS_MAJOR_VRSN`: your Gateway version, e.g. `10.45` for `~/Applications/IB Gateway 10.45`.
+   - `IBC_PATH=~/ibc`
+   - `TRADING_MODE=live`
+   - `TWOFA_TIMEOUT_ACTION=restart`
+4. macOS has no `telnet`. In `~/ibc/commandsend.sh`, replace `| telnet` with `| nc`.
+
+Usage (quit any manually started Gateway first):
+
+```bash
+~/ibc/gatewaystartmacos.sh -inline   # start + auto-login (approve IB Key push)
+~/ibc/commandsend.sh RESTART         # restart in place: no 2FA, ~1 min
+~/ibc/stop.sh                        # tidy shutdown
+```
+
+`RESTART` only works while Gateway is running; once it's gone the command port
+refuses connections and you need the start script again. Logs are in `~/ibc/logs/`.
 
 ### (Optional) Flex Web Service for full trade history
 
@@ -120,6 +165,45 @@ pnpm --filter server test:watch   # or: pnpm --filter web test:watch
 
 Open **http://127.0.0.1:5173** (dev) or **http://127.0.0.1:4010** (prod).
 
+### Mobile access (ngrok + Google login)
+
+`pnpm dev` (and `dev:paper` / `dev:tws`) serves your phone too. When Vite
+starts, it also opens an [ngrok](https://ngrok.com) tunnel to itself, so the
+desktop (`localhost:5173`) and the phone (the ngrok URL) use the **same dev
+server**. The URL is printed next to Vite's own:
+
+```
+  ➜  Local:   http://localhost:5173/
+  ➜  Mobile:  https://your-name.ngrok-free.dev  (Google login: you@gmail.com)
+```
+
+ngrok's edge requires **Google login** and only lets through the emails in
+`NGROK_ALLOWED_EMAILS` (others get 403), so nothing reaches your Mac until
+you've logged in. The servers themselves still listen on localhost only.
+
+One-time setup:
+
+1. `brew install ngrok`, then `ngrok config add-authtoken <token>` (from the
+   ngrok dashboard).
+2. Claim your free **static domain** (ngrok dashboard → Domains) so the phone
+   bookmark never changes.
+3. Add to `server/.env`:
+
+   ```bash
+   NGROK_ALLOWED_EMAILS=you@gmail.com            # comma-separated Google accounts
+   NGROK_DOMAIN=your-name.ngrok-free.dev         # optional; random URL if unset
+   ```
+
+Without `NGROK_ALLOWED_EMAILS`, or without the ngrok CLI, the tunnel is skipped
+and `pnpm dev` works as before. A domain can only be online once: if another
+`pnpm dev` (e.g. a second worktree) already holds it, the tunnel logs
+`ERR_NGROK_334` and that dev server carries on without it.
+
+The tunnel is the Vite plugin `web/vite-plugin-ngrok.ts`, with its logic in
+`web/src/utils/ngrokTunnel.ts`. It writes the traffic policy to
+`.ngrok/policy.json` (gitignored). Only localhost origins get CORS headers, so
+other sites can't read the API from your browser.
+
 ---
 
 ## 3. Configuration (env vars)
@@ -142,6 +226,8 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 | `IB_FLEX_REFRESH_HOURS` | Optional | `12` | Hours stored trades stay fresh before re-fetch |
 | `DB_DRIVER` | Optional | `sqlite` | Storage driver (only `sqlite` today) |
 | `DB_SQLITE_PATH` | Optional | `server/.data/ibkr.sqlite` | SQLite file location |
+| `NGROK_ALLOWED_EMAILS` | Optional | *(empty: tunnel off)* | Comma-separated Google account emails allowed through the `pnpm dev` ngrok tunnel |
+| `NGROK_DOMAIN` | Optional | *(random URL)* | Your static ngrok domain for the `pnpm dev` tunnel |
 
 > `IB_FLEX_TOKEN` and `IB_FLEX_QUERY_ID` are required **together** — set both to
 > enable the P&L tab's full trade history, or neither to fall back to a
