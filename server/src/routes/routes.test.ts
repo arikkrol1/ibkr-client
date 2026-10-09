@@ -8,6 +8,12 @@ const ibMock = vi.hoisted(() => ({
   health: vi.fn(() => ({ connected: true, isDelayed: false })),
 }));
 vi.mock("../ib/connection.js", () => ({ ib: ibMock }));
+const gatewayMock = vi.hoisted(() => ({
+  reconnect: vi.fn(),
+  restart: vi.fn(async (): Promise<unknown> => ({ status: "restarting", mode: "restart" })),
+  status: vi.fn(() => ({ restartEnabled: true, restarting: false, lastAction: null })),
+}));
+vi.mock("../ib/gatewayControl.js", () => ({ gatewayControl: gatewayMock }));
 vi.mock("../ib/pnlHistory.js", () => ({
   getPnlHistory: vi.fn(async () => ({ series: [] })),
   invalidatePnlCache: vi.fn(),
@@ -45,6 +51,7 @@ import { registerPnlRoutes } from "./pnl.js";
 import { registerActivityRoutes } from "./activity.js";
 import { registerPortfolioRoutes } from "./portfolio.js";
 import { registerQuoteRoutes } from "./quotes.js";
+import { registerGatewayRoutes } from "./gateway.js";
 
 let app: FastifyInstance;
 const routes: { method: string; url: string }[] = [];
@@ -63,6 +70,7 @@ beforeEach(async () => {
   await app.register(registerPortfolioRoutes);
   await app.register(registerPnlRoutes);
   await app.register(registerActivityRoutes);
+  await app.register(registerGatewayRoutes);
   await app.ready();
 });
 
@@ -72,9 +80,13 @@ afterEach(async () => {
 });
 
 describe("read-only guardrail", () => {
-  it("exposes no mutating routes besides the Flex refresh", () => {
+  it("exposes no mutating routes besides the Flex refresh and Gateway reconnect/restart", () => {
     const mutating = routes.filter((r) => !["GET", "HEAD"].includes(r.method));
-    expect(mutating).toEqual([{ method: "POST", url: "/api/pnl/refresh" }]);
+    expect(mutating).toEqual([
+      { method: "POST", url: "/api/pnl/refresh" },
+      { method: "POST", url: "/api/ib/reconnect" },
+      { method: "POST", url: "/api/ib/restart" },
+    ]);
     expect(routes.some((r) => /order/i.test(r.url))).toBe(false);
   });
 });
@@ -82,7 +94,49 @@ describe("read-only guardrail", () => {
 describe("GET /api/health", () => {
   it("reports the IB connection", async () => {
     const res = await app.inject("/api/health");
-    expect(res.json()).toEqual({ ok: true, ib: { connected: true, isDelayed: false } });
+    expect(res.json()).toEqual({
+      ok: true,
+      ib: { connected: true, isDelayed: false },
+      gateway: { restartEnabled: true, restarting: false, lastAction: null },
+    });
+  });
+});
+
+describe("Gateway control routes", () => {
+  const post = (url: string, headers: Record<string, string> = { "content-type": "application/json" }) =>
+    app.inject({ method: "POST", url, headers, payload: headers["content-type"]?.startsWith("application/json") ? "{}" : "x" });
+
+  it("POST /api/ib/reconnect reopens the socket", async () => {
+    const res = await post("/api/ib/reconnect");
+    expect(res.statusCode).toBe(200);
+    expect(gatewayMock.reconnect).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [{ status: "restarting", mode: "restart" }, 202, { ok: true, mode: "restart" }],
+    [{ status: "restarting", mode: "start" }, 202, { ok: true, mode: "start" }],
+    [{ status: "disabled", message: "IBC is not installed" }, 501, { message: "IBC is not installed" }],
+    [{ status: "error", message: "outside IBC" }, 409, { message: "outside IBC" }],
+  ])("POST /api/ib/restart maps %o to %i", async (result, code, body) => {
+    gatewayMock.restart.mockResolvedValueOnce(result);
+    const res = await post("/api/ib/restart");
+    expect(res.statusCode).toBe(code);
+    expect(res.json()).toEqual(body);
+  });
+
+  it("returns 429 with Retry-After during the cooldown", async () => {
+    gatewayMock.restart.mockResolvedValueOnce({ status: "cooldown", retryAfterSec: 42 });
+    const res = await post("/api/ib/restart");
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toBe("42");
+    expect(res.json().message).toMatch(/42s/);
+  });
+
+  it.each(["/api/ib/reconnect", "/api/ib/restart"])("%s rejects non-JSON requests", async (url) => {
+    const res = await post(url, { "content-type": "text/plain" });
+    expect(res.statusCode).toBe(415);
+    expect(gatewayMock.reconnect).not.toHaveBeenCalled();
+    expect(gatewayMock.restart).not.toHaveBeenCalled();
   });
 });
 

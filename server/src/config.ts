@@ -1,6 +1,7 @@
 import { config as loadEnv } from "dotenv";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 
 // Load server/.env (one level up from server/src or server/dist), resolved
 // relative to this module so it works regardless of the process cwd.
@@ -48,6 +49,18 @@ export const config = {
    * summed into account totals.
    */
   baseCurrency: (process.env.IB_BASE_CURRENCY ?? "USD").toUpperCase(),
+
+  /**
+   * IBC (IB Controller) — lets the UI restart IB Gateway. Restart is enabled
+   * only when IBC is installed at `path` (see README → IBC). `RESTART` goes to
+   * IBC's local command port; a cold start runs scripts/ibc.sh.
+   */
+  ibc: {
+    path: process.env.IBC_PATH ?? join(homedir(), "ibc"),
+    commandPort: Number(process.env.IBC_COMMAND_PORT ?? 7462),
+    /** Minimum seconds between restart requests (avoids stacking IB Key pushes). */
+    restartCooldownSec: Number(process.env.IB_RESTART_COOLDOWN_SEC ?? 90),
+  },
 
   flex: {
     token: process.env.IB_FLEX_TOKEN ?? "",

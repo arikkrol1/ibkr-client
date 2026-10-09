@@ -1,4 +1,5 @@
 import { useHealth } from "../hooks/useHealth";
+import { GatewayControls } from "./GatewayControls";
 
 /** Slim status strip: shows IB connection health + delayed-data warning. */
 export function ConnectionBanner() {
@@ -14,8 +15,16 @@ export function ConnectionBanner() {
   if (!ib?.connected) {
     return (
       <Bar tone="amber">
-        Not connected to IB Gateway ({ib?.host}:{ib?.port}). Launch IB Gateway, log
-        in, and enable the API. {ib?.lastError ? `(${ib.lastError})` : ""}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span>
+            Not connected to IB Gateway ({ib?.host}:{ib?.port}).{" "}
+            {data.gateway?.restartEnabled
+              ? "Reconnect, or restart Gateway via IBC."
+              : "Launch IB Gateway, log in, and enable the API."}{" "}
+            {ib?.lastError ? `(${ib.lastError})` : ""}
+          </span>
+          <GatewayControls />
+        </div>
       </Bar>
     );
   }

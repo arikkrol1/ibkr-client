@@ -53,4 +53,20 @@ describe("api", () => {
     stubFetch(json({ message: "Flex rate limit" }, { status: 500 }));
     await expect(api.pnlRefresh()).rejects.toThrow("Flex rate limit");
   });
+
+  it("POSTs Gateway reconnect / restart as JSON", async () => {
+    const fetch = stubFetch(json({ ok: true, mode: "start" }, { status: 202 }));
+    expect(await api.ibRestart()).toEqual({ ok: true, mode: "start" });
+    await api.ibReconnect();
+    const init = { method: "POST", headers: { "content-type": "application/json" }, body: "{}" };
+    expect(fetch.mock.calls).toEqual([
+      ["/api/ib/restart", init],
+      ["/api/ib/reconnect", init],
+    ]);
+  });
+
+  it("surfaces the restart cooldown message", async () => {
+    stubFetch(json({ message: "Restart already requested; try again in 42s" }, { status: 429 }));
+    await expect(api.ibRestart()).rejects.toThrow("try again in 42s");
+  });
 });

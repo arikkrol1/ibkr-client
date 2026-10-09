@@ -14,7 +14,25 @@ export interface Health {
     isDelayed: boolean;
     lastError: string | null;
   };
+  /** Reconnect / restart state (IBC). */
+  gateway: {
+    restartEnabled: boolean;
+    /** A restart/start was requested within the cooldown window. */
+    restarting: boolean;
+    lastAction: GatewayLastAction | null;
+  };
 }
+
+export interface GatewayLastAction {
+  action: "reconnect" | "restart" | "start";
+  /** Epoch ms. */
+  at: number;
+  ok: boolean;
+  message?: string;
+}
+
+/** `restart`: IBC restarted Gateway in place. `start`: cold start, needs IB Key 2FA. */
+export type RestartMode = "restart" | "start";
 
 export interface SymbolMatch {
   conId?: number;
@@ -179,6 +197,20 @@ async function getJSON<T>(url: string): Promise<T> {
   return res.json();
 }
 
+/** POST with a JSON body (the Gateway routes require application/json). */
+async function postJSON<T>(url: string, body: unknown = {}): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message ?? `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export const api = {
   health: () => getJSON<Health>("/api/health"),
   search: (q: string) =>
@@ -208,4 +240,6 @@ export const api = {
     }
     return res.json();
   },
+  ibReconnect: () => postJSON<{ ok: boolean }>("/api/ib/reconnect"),
+  ibRestart: () => postJSON<{ ok: boolean; mode: RestartMode }>("/api/ib/restart"),
 };

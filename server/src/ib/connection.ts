@@ -64,6 +64,12 @@ class IbConnection {
     this.api.disconnect();
   }
 
+  /** Drop and reopen the API socket (e.g. a stale session). Gateway itself is untouched. */
+  reconnect(): void {
+    this.api.disconnect();
+    setTimeout(() => this.connect(), 1000);
+  }
+
   get state(): ConnectionState {
     return this._state;
   }

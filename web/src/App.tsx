@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { GatewayMenu } from "./components/GatewayControls";
 import { ActivityPage } from "./pages/ActivityPage";
 import { ChartPage } from "./pages/ChartPage";
 import { ComparePage } from "./pages/ComparePage";
@@ -22,6 +23,7 @@ export default function App() {
           <Tab to="/chart">Charts</Tab>
           <Tab to="/sectors">Sectors</Tab>
         </nav>
+        <GatewayMenu />
       </header>
       <ConnectionBanner />
       <main className="flex-1 p-4">

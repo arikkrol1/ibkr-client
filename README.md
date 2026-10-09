@@ -104,7 +104,8 @@ pnpm ibc:status     # is IBC / the Gateway API up?
 These wrap `scripts/ibc.sh`. It defaults to `~/ibc`, command port `7462` and API
 port `4001`, overridable with `IBC_PATH`, `IBC_COMMAND_PORT` and `IB_PORT`.
 `pnpm ibc` refuses to start if a Gateway is already running outside IBC.
-`RESTART` only works while IBC is running; once Gateway is gone,
+The dashboard's **Restart Gateway** button does the same as `pnpm ibc:restart`
+(see §4). `RESTART` only works while IBC is running; once Gateway is gone,
 `pnpm ibc:restart` falls back to a fresh start, which needs 2FA. Logs are in
 `~/ibc/logs/` (start output in `start.out`).
 
@@ -231,6 +232,9 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 | `IB_FLEX_REFRESH_HOURS` | Optional | `12` | Hours stored trades stay fresh before re-fetch |
 | `DB_DRIVER` | Optional | `sqlite` | Storage driver (only `sqlite` today) |
 | `DB_SQLITE_PATH` | Optional | `server/.data/ibkr.sqlite` | SQLite file location |
+| `IBC_PATH` | Optional | `~/ibc` | IBC install dir; **Restart Gateway** is enabled only if `gatewaystartmacos.sh` is there |
+| `IBC_COMMAND_PORT` | Optional | `7462` | IBC's command port (`CommandServerPort` in `config.ini`) |
+| `IB_RESTART_COOLDOWN_SEC` | Optional | `90` | Minimum seconds between Gateway restart requests |
 | `NGROK_ALLOWED_EMAILS` | Optional | *(empty: tunnel off)* | Comma-separated Google account emails allowed through the `pnpm dev` ngrok tunnel |
 | `NGROK_DOMAIN` | Optional | *(random URL)* | Your static ngrok domain for the `pnpm dev` tunnel |
 
@@ -244,6 +248,21 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 
 The app is a single dark dashboard with six tabs (top nav). Prices/charts badge
 as **DELAYED** when the account lacks a realtime subscription.
+
+**Gateway connection:**
+- **Connection banner:** a strip under the header appears only when something
+  is wrong (backend unreachable, IB Gateway disconnected, or delayed data).
+- **Disconnected:** the banner shows **Reconnect** (drop and reopen the API
+  socket) and, when IBC is installed, **Restart Gateway**.
+- **Restart Gateway:**
+  - If IBC is running, it restarts Gateway in place: no 2FA, back in about a
+    minute.
+  - If Gateway has quit, it cold-starts it via `scripts/ibc.sh`, and the banner
+    asks you to approve the IB Key notification on your phone.
+  - A second restart within the cooldown (90 s by default) is refused.
+- **⋯ Gateway (header):** a menu with the same buttons and the last action
+  ("Restart 3 min ago" or why it failed), so you can restart even while
+  Gateway looks connected.
 
 ### Dashboard (`/`)
 
@@ -383,13 +402,21 @@ A grid of ETF-proxy mini-charts for a quick market read.
 
 ## 5. API surface
 
-- `GET /api/health` — connection + market-data-type status
+- `GET /api/health` — connection + market-data-type status, plus `gateway` (restart enabled / in progress / last action)
 - `GET /api/search?q=AAPL` — symbol lookup
 - `GET /api/symbol-info?symbol=AAPL` — contract details for a symbol/conId
 - `GET /api/history?symbol=AAPL&barSize=1%20day&duration=6%20M` — candlestick bars
 - `GET /api/portfolio` — positions, balances, PnL
 - `GET /api/pnl?days=90` — realized/unrealized P&L series per symbol
 - `POST /api/pnl/refresh` — force a Flex trade re-fetch
+- `POST /api/ib/reconnect`: drop and reopen the IB API socket (JSON body required)
+- `POST /api/ib/restart`: restart Gateway via IBC, or cold-start it if IBC isn't running. Responses:
+  - `202 {mode:"restart"|"start"}` on success;
+  - `429` + `Retry-After` during the cooldown;
+  - `501` if IBC isn't installed;
+  - `409` if Gateway runs outside IBC.
+
+  Requires a JSON body. Neither route touches orders.
 - `GET /api/activity` — every traded stock with its fills, daily bars and open/closed position, newest activity first
 - `WS  /ws/quotes` — send `{"type":"subscribe","symbol":"AAPL"}`; receive `{type:"quote",…}`
 
