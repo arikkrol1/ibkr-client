@@ -86,22 +86,27 @@ your phone for a cold start).
    | `AutoRestartTime` | e.g. `11:45 PM` | IBC-managed daily restart, no fresh 2FA |
 
 3. Edit `~/ibc/gatewaystartmacos.sh`:
-   - `TWS_MAJOR_VRSN`: your Gateway version, e.g. `10.45` for `~/Applications/IB Gateway 10.45`.
+   - `TWS_MAJOR_VRSN`: your Gateway version, e.g. `10.50` for `~/Applications/IB Gateway 10.50`.
    - `IBC_PATH=~/ibc`
    - `TRADING_MODE=live`
    - `TWOFA_TIMEOUT_ACTION=restart`
 4. macOS has no `telnet`. In `~/ibc/commandsend.sh`, replace `| telnet` with `| nc`.
 
-Usage (quit any manually started Gateway first):
+Usage, from the repo (quit any Gateway you opened by hand first):
 
 ```bash
-~/ibc/gatewaystartmacos.sh -inline   # start + auto-login (approve IB Key push)
-~/ibc/commandsend.sh RESTART         # restart in place: no 2FA, ~1 min
-~/ibc/stop.sh                        # tidy shutdown
+pnpm ibc            # start Gateway under IBC, detached; waits for login (approve the IB Key push)
+pnpm ibc:restart    # restart in place: no 2FA, ~1 min (starts it if IBC isn't running)
+pnpm ibc:stop       # tidy shutdown
+pnpm ibc:status     # is IBC / the Gateway API up?
 ```
 
-`RESTART` only works while Gateway is running; once it's gone the command port
-refuses connections and you need the start script again. Logs are in `~/ibc/logs/`.
+These wrap `scripts/ibc.sh`. It defaults to `~/ibc`, command port `7462` and API
+port `4001`, overridable with `IBC_PATH`, `IBC_COMMAND_PORT` and `IB_PORT`.
+`pnpm ibc` refuses to start if a Gateway is already running outside IBC.
+`RESTART` only works while IBC is running; once Gateway is gone,
+`pnpm ibc:restart` falls back to a fresh start, which needs 2FA. Logs are in
+`~/ibc/logs/` (start output in `start.out`).
 
 ### (Optional) Flex Web Service for full trade history
 

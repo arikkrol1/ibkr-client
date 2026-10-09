@@ -11,6 +11,10 @@
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm --filter server build && pnpm --filter web build",
     "start": "pnpm --filter server start",
+    "ibc": "bash scripts/ibc.sh start",
+    "ibc:restart": "bash scripts/ibc.sh restart",
+    "ibc:stop": "bash scripts/ibc.sh stop",
+    "ibc:status": "bash scripts/ibc.sh status",
     "test": "pnpm -r test"
   },
   "engines": {
