@@ -12,7 +12,8 @@ interface Props {
 /**
  * Hover bubble describing a symbol (name + asset type / industry), fetched
  * lazily on first hover and cached indefinitely (contract details are
- * effectively immutable).
+ * effectively immutable). Mouse only: on touch the wrapped button's tap adds
+ * the symbol, and a bubble would stick.
  */
 export function SymbolTip({ symbol, conId, children }: Props) {
   const [hover, setHover] = useState(false);
@@ -27,8 +28,8 @@ export function SymbolTip({ symbol, conId, children }: Props) {
   return (
     <span
       className="relative inline-flex"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHover(true)}
+      onPointerLeave={() => setHover(false)}
     >
       {children}
       {hover && !isError && (

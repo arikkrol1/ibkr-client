@@ -49,11 +49,11 @@ export function SectorsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-gray-500">
           ETF proxies, daily closes over the selected range.
         </p>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {RANGES.map((r, i) => (
             <button
               key={r.label}

@@ -202,7 +202,7 @@ export function ComparePage() {
               </button>
             ))}
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {TIMEFRAMES.map((t) => (
               <button
                 key={t.key}
@@ -307,6 +307,7 @@ export function ComparePage() {
                 })
               )}
             </div>
+            <div className="overflow-x-auto">
             <table className="text-xs">
               <tbody>
                 {CURATED_GROUPS.map((g) => (
@@ -340,6 +341,7 @@ export function ComparePage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>

@@ -44,7 +44,7 @@ export function HoldingsCharts({ positions }: { positions: PortfolioPosition[] }
         <h2 className="text-sm font-semibold text-gray-300">
           Holdings ({holdings.length})
         </h2>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {TIMEFRAMES.map((t) => (
             <button
               key={t.key}

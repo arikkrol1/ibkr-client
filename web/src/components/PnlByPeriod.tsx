@@ -51,7 +51,7 @@ export function PnlByPeriod() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-800 text-left uppercase text-gray-500">
-                <th className="py-1.5 pr-3">Year</th>
+                <th className="sticky left-0 z-10 bg-[#0d121a] py-1.5 pr-3">Year</th>
                 {MONTH_LABELS.map((label) => (
                   <th key={label} className="py-1.5 pr-2 text-right">
                     {label}
@@ -74,7 +74,7 @@ export function PnlByPeriod() {
                 const twr = periods.byYearTwr.get(year);
                 return (
                   <tr key={year} className="border-b border-gray-900 hover:bg-gray-900/60">
-                    <td className="py-1.5 pr-3 font-medium text-gray-100">{year}</td>
+                    <td className="sticky left-0 z-10 bg-[#0d121a] py-1.5 pr-3 font-medium text-gray-100">{year}</td>
                     {MONTH_LABELS.map((_, month) => {
                       const pnl = periods.byMonth.get(`${year}-${month}`);
                       return (

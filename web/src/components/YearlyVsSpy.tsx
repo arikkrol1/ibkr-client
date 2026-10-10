@@ -174,22 +174,22 @@ export function YearlyVsSpy() {
                 />
               ))}
             </svg>
-            {/* Hover layer: one hit column per month with crosshair + markers. */}
+            {/* Hover layer: one hit column per month with crosshair + markers (tap focuses it on touch). */}
             <div className="absolute inset-0 flex">
               {rows.map((r) => {
                 const p = points.find((c) => c.month === r.month);
                 return (
-                  <div key={r.month} className="group relative min-w-0 flex-1">
+                  <div key={r.month} tabIndex={0} className="group relative min-w-0 flex-1 outline-none">
                     {p && (
                       <>
-                        <div className="absolute inset-y-0 left-1/2 w-px bg-gray-700 opacity-0 transition-opacity group-hover:opacity-100" />
+                        <div className="absolute inset-y-0 left-1/2 w-px bg-gray-700 opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100" />
                         {[
                           { value: p.spy, color: SPY_COLOR },
                           { value: p.portfolio, color: PORTFOLIO_COLOR },
                         ].map(({ value, color }) => (
                           <div
                             key={color}
-                            className="absolute left-1/2 z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                            className="absolute left-1/2 z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100"
                             style={{
                               top: `${yPct(value)}%`,
                               background: color,
@@ -198,7 +198,7 @@ export function YearlyVsSpy() {
                           />
                         ))}
                         <div
-                          className={`pointer-events-none absolute -top-1.5 z-20 -translate-y-full whitespace-nowrap rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                          className={`pointer-events-none absolute -top-1.5 z-20 -translate-y-full whitespace-nowrap rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 ${
                             r.month < 2
                               ? "left-0"
                               : r.month > 9

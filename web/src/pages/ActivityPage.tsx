@@ -79,7 +79,7 @@ export function ActivityPage() {
             ))}
           </div>
           <span className="h-5 w-px bg-gray-800" aria-hidden />
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {ACTIVITY_TIMEFRAMES.map((t) => (
               <button
                 key={t.key}

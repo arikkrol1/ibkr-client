@@ -247,8 +247,25 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 
 ## 4. The UI — tabs & views
 
-The app is a single dark dashboard with six tabs (top nav). Prices/charts badge
-as **DELAYED** when the account lacks a realtime subscription.
+The app is a single dark dashboard with six tabs (top nav on desktop, bottom
+tab bar on phones). Prices/charts badge as **DELAYED** when the account lacks a
+realtime subscription.
+
+**Phone layout:** the same server and URL serve desktop and phone (see "Mobile
+access"). The layout is picked from the user agent: iPhone and Android phones
+get the phone layout; tablets and desktops get the desktop one.
+- **Navigation:** a compact sticky header (logo + **⋯ Gateway**) and a bottom
+  tab bar (Home · P&L · Activity · Compare · Charts · Sectors).
+- **Charts:** shorter on phones (main charts ~300–340 px instead of 480–520 px).
+- **Positions table:** hides Avg Cost and Mkt Value.
+- **Monthly P&L table:** scrolls sideways with the Year column pinned.
+- **Buttons:** timeframe button rows wrap.
+- **Tooltips:** the yearly P&L / vs-SPY charts show their tooltip on tap. The
+  symbol description bubbles on Compare are desktop-only, since a tap there adds
+  the symbol.
+- **Layout switch:** the footer's **Layout: Auto · Mobile · Desktop** overrides
+  the detection. It's remembered per browser.
+- **Add to Home Screen:** opens the dashboard full-screen with its own icon.
 
 **Gateway connection:**
 - **Connection banner:** a strip under the header appears only when something

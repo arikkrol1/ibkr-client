@@ -95,5 +95,5 @@ export function PriceChart({ bars }: Props) {
     chartRef.current?.timeScale().fitContent();
   }, [bars]);
 
-  return <div ref={containerRef} className="h-[520px] w-full" />;
+  return <div ref={containerRef} className="h-[520px] w-full mobile:h-[340px]" />;
 }

@@ -78,8 +78,8 @@ export function YearlyBreakdown() {
               const up = r.pnl >= 0;
               const frac = span > 0 ? Math.abs(r.pnl) / span : 0;
               return (
-                <div key={r.key} className="group relative min-w-0 flex-1">
-                  <div className="pointer-events-none absolute -top-1.5 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                <div key={r.key} tabIndex={0} className="group relative min-w-0 flex-1 outline-none">
+                  <div className="pointer-events-none absolute -top-1.5 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100">
                     <span className="font-medium text-gray-100">{r.symbol}</span>{" "}
                     <span className={`tabular-nums ${pnlColor(r.pnl)}`}>
                       {fmtMoney(r.pnl)}
@@ -89,8 +89,8 @@ export function YearlyBreakdown() {
                     <div
                       className={`absolute left-1/2 -translate-x-1/2 ${
                         up
-                          ? "rounded-t bg-emerald-500/80 group-hover:bg-emerald-400"
-                          : "rounded-b bg-red-500/80 group-hover:bg-red-400"
+                          ? "rounded-t bg-emerald-500/80 group-hover:bg-emerald-400 group-focus:bg-emerald-400"
+                          : "rounded-b bg-red-500/80 group-hover:bg-red-400 group-focus:bg-red-400"
                       }`}
                       style={{
                         width: "min(1.25rem, 75%)",

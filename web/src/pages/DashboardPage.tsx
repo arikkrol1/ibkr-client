@@ -85,9 +85,9 @@ function PositionsTable({ positions }: { positions: PortfolioPosition[] }) {
           <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
             <th className="py-2 pr-3">Symbol</th>
             <th className="py-2 pr-3 text-right">Qty</th>
-            <th className="py-2 pr-3 text-right">Avg Cost</th>
+            <th className="py-2 pr-3 text-right mobile:hidden">Avg Cost</th>
             <th className="py-2 pr-3 text-right">Last</th>
-            <th className="py-2 pr-3 text-right">Mkt Value</th>
+            <th className="py-2 pr-3 text-right mobile:hidden">Mkt Value</th>
             <th className="py-2 pr-3 text-right">Unreal. P&L</th>
             <th className="py-2 pr-3 text-right">%</th>
           </tr>
@@ -106,9 +106,9 @@ function PositionsTable({ positions }: { positions: PortfolioPosition[] }) {
               >
                 <td className="py-2 pr-3 font-medium text-gray-100">{p.symbol}</td>
                 <td className="py-2 pr-3 text-right tabular-nums">{fmtNum(p.position, 0)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums">{fmtNum(p.avgCost)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums mobile:hidden">{fmtNum(p.avgCost)}</td>
                 <td className="py-2 pr-3 text-right tabular-nums">{fmtNum(p.marketPrice)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums">{fmtMoney(p.marketValue, p.currency)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums mobile:hidden">{fmtMoney(p.marketValue, p.currency)}</td>
                 <td className={`py-2 pr-3 text-right tabular-nums ${pnlColor(p.unrealizedPnL)}`}>
                   {fmtMoney(p.unrealizedPnL, p.currency)}
                 </td>

@@ -26,7 +26,7 @@ export function PnlPctChart({
     <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-gray-300">P&L % by symbol</h2>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {TIMEFRAMES.map((t) => (
             <button
               key={t.key}

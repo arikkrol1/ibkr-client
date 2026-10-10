@@ -162,7 +162,7 @@ export function PnlChart({ series, hidden, colorFor }: Props) {
 
   return (
     <div className="relative">
-      <div ref={containerRef} className="h-[480px] w-full" />
+      <div ref={containerRef} className="h-[480px] w-full mobile:h-[300px]" />
       <div
         ref={tooltipRef}
         className="pointer-events-none absolute z-10 hidden min-w-40 rounded-lg border border-gray-700 bg-gray-950/95 p-2.5 text-xs shadow-xl"
