@@ -235,6 +235,7 @@ Every variable has a sensible default, so a stock local IB Gateway setup needs
 | `IBC_PATH` | Optional | `~/ibc` | IBC install dir; **Restart Gateway** is enabled only if `gatewaystartmacos.sh` is there |
 | `IBC_COMMAND_PORT` | Optional | `7462` | IBC's command port (`CommandServerPort` in `config.ini`) |
 | `IB_RESTART_COOLDOWN_SEC` | Optional | `90` | Minimum seconds between Gateway restart requests |
+| `IB_RESTART_FALLBACK_SEC` | Optional | `180` | Seconds a no-2FA restart gets to reconnect before falling back to a fresh IB Key login |
 | `NGROK_ALLOWED_EMAILS` | Optional | *(empty: tunnel off)* | Comma-separated Google account emails allowed through the `pnpm dev` ngrok tunnel |
 | `NGROK_DOMAIN` | Optional | *(random URL)* | Your static ngrok domain for the `pnpm dev` tunnel |
 
@@ -256,7 +257,10 @@ as **DELAYED** when the account lacks a realtime subscription.
   socket) and, when IBC is installed, **Restart Gateway**.
 - **Restart Gateway:**
   - If IBC is running, it restarts Gateway in place: no 2FA, back in about a
-    minute.
+    minute. That relies on an auto-restart token IBKR sometimes rejects ("security
+    tokens … expired"), leaving Gateway at a login error. So if the API isn't back
+    within 3 minutes, the server stops Gateway (via IBC, killing it if needed) and
+    starts it fresh, and the banner asks you to approve the IB Key notification.
   - If Gateway has quit, it cold-starts it via `scripts/ibc.sh`, and the banner
     asks you to approve the IB Key notification on your phone.
   - A second restart within the cooldown (90 s by default) is refused.
@@ -411,7 +415,7 @@ A grid of ETF-proxy mini-charts for a quick market read.
 - `POST /api/pnl/refresh` — force a Flex trade re-fetch
 - `POST /api/ib/reconnect`: drop and reopen the IB API socket (JSON body required)
 - `POST /api/ib/restart`: restart Gateway via IBC, or cold-start it if IBC isn't running. Responses:
-  - `202 {mode:"restart"|"start"}` on success;
+  - `202 {mode:"restart"|"start"}` on success (a `restart` that doesn't reconnect falls back to a fresh login);
   - `429` + `Retry-After` during the cooldown;
   - `501` if IBC isn't installed;
   - `409` if Gateway runs outside IBC.

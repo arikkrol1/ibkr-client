@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:net";
 
 vi.mock("./connection.js", () => ({ ib: { reconnect: vi.fn(), isConnected: false } }));
 
-import { createGatewayControl, sendIbcCommand, type GatewayControlDeps } from "./gatewayControl.js";
+import { createGatewayControl, isPortOpen, sendIbcCommand, type GatewayControlDeps } from "./gatewayControl.js";
 
 const refused = () => Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" });
 
@@ -11,11 +11,16 @@ function setup(over: Partial<GatewayControlDeps> = {}) {
   let t = 1_000_000;
   const deps = {
     restartEnabled: vi.fn(() => true),
-    sendCommand: vi.fn(async () => "OK RESTART in progress"),
+    sendCommand: vi.fn(async (_cmd: "RESTART" | "STOP") => "OK"),
+    isIbcUp: vi.fn(async () => false),
     startGateway: vi.fn(),
+    killGateway: vi.fn(),
     reconnectApi: vi.fn(),
     isApiConnected: vi.fn(() => false),
     cooldownMs: 90_000,
+    fallbackMs: 180_000,
+    // By default the post-RESTART watch never wakes; fallback tests override it.
+    sleep: vi.fn(() => new Promise<void>(() => {})),
     now: () => t,
     ...over,
   };
@@ -29,14 +34,18 @@ describe("restart", () => {
     expect(await gc.restart()).toEqual({ status: "restarting", mode: "restart" });
     expect(deps.sendCommand).toHaveBeenCalledWith("RESTART");
     expect(deps.startGateway).not.toHaveBeenCalled();
-    expect(gc.status()).toMatchObject({ restarting: true, lastAction: { action: "restart", ok: true } });
+    expect(gc.status()).toMatchObject({
+      restarting: true,
+      phase: "restart",
+      lastAction: { action: "restart", ok: true },
+    });
   });
 
   it("cold-starts Gateway when IBC refuses the connection", async () => {
     const { gc, deps } = setup({ sendCommand: vi.fn(async () => Promise.reject(refused())) });
     expect(await gc.restart()).toEqual({ status: "restarting", mode: "start" });
     expect(deps.startGateway).toHaveBeenCalledOnce();
-    expect(gc.status().lastAction).toMatchObject({ action: "start", ok: true });
+    expect(gc.status()).toMatchObject({ phase: "start", lastAction: { action: "start", ok: true } });
   });
 
   it("won't cold-start next to a Gateway running outside IBC", async () => {
@@ -63,14 +72,21 @@ describe("restart", () => {
     expect(gc.status().restartEnabled).toBe(false);
   });
 
-  it("rate-limits repeated requests, then allows one after the cooldown", async () => {
-    const { gc, deps, advance } = setup();
+  it("rate-limits repeated cold starts, then allows one after the cooldown", async () => {
+    const { gc, deps, advance } = setup({ sendCommand: vi.fn(async () => Promise.reject(refused())) });
     await gc.restart();
     advance(30_000);
     expect(await gc.restart()).toEqual({ status: "cooldown", retryAfterSec: 60 });
     advance(60_000);
     expect((await gc.restart()).status).toBe("restarting");
-    expect(deps.sendCommand).toHaveBeenCalledTimes(2);
+    expect(deps.startGateway).toHaveBeenCalledTimes(2);
+  });
+
+  it("blocks new requests until a RESTART's fallback window has passed", async () => {
+    const { gc, advance } = setup();
+    await gc.restart();
+    advance(180_000);
+    expect(await gc.restart()).toEqual({ status: "cooldown", retryAfterSec: 90 });
   });
 
   it("is single-flight while a request is in progress", async () => {
@@ -83,6 +99,69 @@ describe("restart", () => {
     release();
     expect((await first).status).toBe("restarting");
     expect(deps.sendCommand).toHaveBeenCalledOnce();
+  });
+});
+
+describe("fallback after RESTART", () => {
+  /** Let the fire-and-forget watch run to completion. */
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const immediate = () => vi.fn(async (_ms: number) => {});
+
+  it("does nothing when the API is back in time", async () => {
+    const sleep = immediate();
+    const { gc, deps } = setup({ sleep, isApiConnected: vi.fn(() => true) });
+    await gc.restart();
+    await settle();
+    expect(sleep).toHaveBeenCalledWith(180_000);
+    expect(deps.sendCommand).toHaveBeenCalledTimes(1); // just RESTART
+    expect(deps.startGateway).not.toHaveBeenCalled();
+    expect(gc.status().phase).toBe("idle");
+  });
+
+  it("stops Gateway via IBC and cold-starts it when the API didn't come back", async () => {
+    const up = [true, true, false]; // IBC takes two polls to shut down
+    const { gc, deps } = setup({
+      sleep: immediate(),
+      isIbcUp: vi.fn(async () => up.shift() ?? false),
+    });
+    await gc.restart();
+    await settle();
+    expect(vi.mocked(deps.sendCommand).mock.calls.map((c) => c[0])).toEqual(["RESTART", "STOP"]);
+    expect(deps.killGateway).not.toHaveBeenCalled();
+    expect(deps.startGateway).toHaveBeenCalledOnce();
+    expect(gc.status()).toMatchObject({
+      phase: "start",
+      restarting: true,
+      lastAction: { action: "start", ok: true, message: expect.stringMatching(/IB Key/) },
+    });
+  });
+
+  it("kills Gateway when IBC won't stop", async () => {
+    const { gc, deps } = setup({ sleep: immediate(), isIbcUp: vi.fn(async () => true) });
+    await gc.restart();
+    await settle();
+    expect(deps.killGateway).toHaveBeenCalledOnce();
+    expect(deps.startGateway).toHaveBeenCalledOnce();
+  });
+
+  it("still cold-starts if the STOP command itself fails", async () => {
+    const sendCommand = vi.fn(async (cmd: "RESTART" | "STOP") =>
+      cmd === "STOP" ? Promise.reject(refused()) : "OK",
+    );
+    const { gc, deps } = setup({ sleep: immediate(), sendCommand });
+    await gc.restart();
+    await settle();
+    expect(deps.startGateway).toHaveBeenCalledOnce();
+  });
+
+  it("returns to idle once the cold start has reconnected", async () => {
+    let connected = false;
+    const { gc } = setup({ sleep: immediate(), isApiConnected: vi.fn(() => connected) });
+    await gc.restart();
+    await settle();
+    expect(gc.status().phase).toBe("start");
+    connected = true;
+    expect(gc.status().phase).toBe("idle");
   });
 });
 
@@ -133,6 +212,14 @@ describe("sendIbcCommand", () => {
     await new Promise<void>((r) => server!.close(() => r()));
     server = undefined;
     await expect(sendIbcCommand(port, "RESTART")).rejects.toMatchObject({ code: "ECONNREFUSED" });
+  });
+
+  it("isPortOpen tells a listening port from a closed one", async () => {
+    const ibc = await fakeIbc(() => "");
+    expect(await isPortOpen(ibc.port)).toBe(true);
+    await new Promise<void>((r) => server!.close(() => r()));
+    server = undefined;
+    expect(await isPortOpen(ibc.port)).toBe(false);
   });
 
   it("times out when IBC never replies", async () => {

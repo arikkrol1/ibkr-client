@@ -60,6 +60,11 @@ export const config = {
     commandPort: Number(process.env.IBC_COMMAND_PORT ?? 7462),
     /** Minimum seconds between restart requests (avoids stacking IB Key pushes). */
     restartCooldownSec: Number(process.env.IB_RESTART_COOLDOWN_SEC ?? 90),
+    /**
+     * Seconds a no-2FA RESTART gets to bring the API back before falling back to
+     * stop + fresh login (IBKR sometimes rejects the auto-restart token).
+     */
+    restartFallbackSec: Number(process.env.IB_RESTART_FALLBACK_SEC ?? 180),
   },
 
   flex: {

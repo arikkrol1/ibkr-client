@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useHealth } from "../hooks/useHealth";
-import { lastActionText, restartMessage } from "../utils/gateway";
+import { lastActionText, phaseMessage, restartMessage } from "../utils/gateway";
 
 /**
  * Reconnect / Restart Gateway buttons plus a one-line status. Used in the
@@ -34,8 +34,18 @@ export function GatewayControls({ showLastAction = false }: { showLastAction?: b
     }
   };
 
+  // Drop the click's success note once the server says the restart is over.
+  const serverPhase = gateway?.phase;
+  useEffect(() => {
+    if (serverPhase === "idle") setNote((n) => (n?.error ? n : null));
+  }, [serverPhase]);
+
   const restarting = gateway?.restarting ?? false;
+  // The server's phase wins over the click's note: e.g. a failed auto-restart
+  // switches to a fresh login minutes later, which needs the IB Key prompt.
+  const phase = phaseMessage(gateway?.phase);
   const last = showLastAction ? lastActionText(gateway?.lastAction ?? null, Date.now()) : null;
+  const status = note?.error ? note : phase ? { text: phase } : note;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -47,8 +57,8 @@ export function GatewayControls({ showLastAction = false }: { showLastAction?: b
           {busy === "restart" || restarting ? "Restarting…" : "Restart Gateway"}
         </Button>
       )}
-      {note && <span className={note.error ? "text-red-300" : ""}>{note.text}</span>}
-      {!note && last && <span className="text-gray-400">{last}</span>}
+      {status && <span className={status.error ? "text-red-300" : ""}>{status.text}</span>}
+      {!status && last && <span className="text-gray-400">{last}</span>}
     </div>
   );
 }

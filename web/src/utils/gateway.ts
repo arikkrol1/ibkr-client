@@ -1,16 +1,24 @@
-import type { GatewayLastAction, RestartMode } from "../api";
+import type { GatewayLastAction, Health, RestartMode } from "../api";
 
 /** What to tell the user right after a restart request is accepted. */
 export function restartMessage(mode: RestartMode): string {
   return mode === "start"
     ? "Starting IB Gateway: approve the IB Key notification on your phone."
-    : "Restarting IB Gateway: back in about a minute.";
+    : "Restarting IB Gateway: back in about a minute (falls back to a fresh IB Key login if not back in ~3 min).";
+}
+
+/** Status line for a restart in flight, from /api/health; null when idle. */
+export function phaseMessage(phase: Health["gateway"]["phase"] | undefined): string | null {
+  if (phase === "start") return "Logging in to IB Gateway: approve the IB Key notification on your phone.";
+  if (phase === "restart") return "Restarting IB Gateway…";
+  return null;
 }
 
 const VERBS: Record<GatewayLastAction["action"], string> = {
   reconnect: "Reconnect",
   restart: "Restart",
   start: "Start",
+  fallback: "Fallback",
 };
 
 /** "Restart 3 min ago", or the failure message, for the header menu. */

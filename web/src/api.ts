@@ -19,12 +19,14 @@ export interface Health {
     restartEnabled: boolean;
     /** A restart/start was requested within the cooldown window. */
     restarting: boolean;
+    /** `restart`: no-2FA restart in flight. `start`: fresh login, waiting on IB Key. */
+    phase: "idle" | "restart" | "start";
     lastAction: GatewayLastAction | null;
   };
 }
 
 export interface GatewayLastAction {
-  action: "reconnect" | "restart" | "start";
+  action: "reconnect" | "restart" | "start" | "fallback";
   /** Epoch ms. */
   at: number;
   ok: boolean;

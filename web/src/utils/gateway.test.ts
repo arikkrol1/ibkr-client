@@ -1,13 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { lastActionText, restartMessage } from "./gateway";
+import { lastActionText, phaseMessage, restartMessage } from "./gateway";
 
 describe("restartMessage", () => {
   it("asks for the IB Key approval on a cold start", () => {
     expect(restartMessage("start")).toMatch(/approve the IB Key/);
   });
 
-  it("promises about a minute for an in-place restart", () => {
-    expect(restartMessage("restart")).toMatch(/about a minute/);
+  it("promises about a minute for an in-place restart, and mentions the fallback", () => {
+    expect(restartMessage("restart")).toMatch(/about a minute.*fresh IB Key login/);
+  });
+});
+
+describe("phaseMessage", () => {
+  it("prompts for IB Key during a fresh login", () => {
+    expect(phaseMessage("start")).toMatch(/approve the IB Key/);
+  });
+
+  it("shows a restart in flight", () => {
+    expect(phaseMessage("restart")).toMatch(/Restarting/);
+  });
+
+  it.each(["idle", undefined] as const)("is null when %s", (phase) => {
+    expect(phaseMessage(phase)).toBeNull();
   });
 });
 
