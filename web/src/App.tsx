@@ -1,6 +1,5 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { ConnectionBanner } from "./components/ConnectionBanner";
-import { DeviceToggle } from "./components/DeviceToggle";
 import { GatewayMenu } from "./components/GatewayControls";
 import { ActivityPage } from "./pages/ActivityPage";
 import { ChartPage } from "./pages/ChartPage";
@@ -36,7 +35,6 @@ export default function App() {
           <Route path="/chart" element={<ChartPage />} />
           <Route path="/sectors" element={<SectorsPage />} />
         </Routes>
-        <DeviceToggle />
       </main>
       <BottomNav />
     </div>

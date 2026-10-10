@@ -1,10 +1,9 @@
 /**
  * Phone vs desktop layout, chosen from the user agent (the same dev server
- * serves both, see README → Mobile access), with a manual override.
+ * serves both, see README → Mobile access).
  */
 
 export type Device = "mobile" | "desktop";
-export type DeviceOverride = "auto" | Device;
 
 export interface NavigatorLike {
   userAgent: string;
@@ -20,12 +19,4 @@ const PHONE_UA = /iPhone|iPod|Android.+Mobile|Windows Phone|IEMobile|BlackBerry|
 /** Mobile if either the Client Hints or the UA string says it's a phone. */
 export function detectDevice(nav: NavigatorLike): Device {
   return nav.userAgentData?.mobile === true || PHONE_UA.test(nav.userAgent) ? "mobile" : "desktop";
-}
-
-export function parseOverride(raw: string | null | undefined): DeviceOverride {
-  return raw === "mobile" || raw === "desktop" ? raw : "auto";
-}
-
-export function resolveDevice(override: DeviceOverride, detected: Device): Device {
-  return override === "auto" ? detected : override;
 }

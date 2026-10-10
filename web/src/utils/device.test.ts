@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectDevice, parseOverride, resolveDevice } from "./device";
+import { detectDevice } from "./device";
 
 const UA = {
   iphone:
@@ -39,25 +39,5 @@ describe("detectDevice", () => {
 
   it("is desktop when neither signal says phone", () => {
     expect(detectDevice({ userAgent: UA.macChrome, userAgentData: { mobile: false } })).toBe("desktop");
-  });
-});
-
-describe("parseOverride", () => {
-  it.each([
-    ["mobile", "mobile"],
-    ["desktop", "desktop"],
-    ["auto", "auto"],
-    [null, "auto"],
-    ["garbage", "auto"],
-  ])("%s → %s", (raw, expected) => {
-    expect(parseOverride(raw)).toBe(expected);
-  });
-});
-
-describe("resolveDevice", () => {
-  it("uses the detected device on auto, otherwise the override", () => {
-    expect(resolveDevice("auto", "mobile")).toBe("mobile");
-    expect(resolveDevice("desktop", "mobile")).toBe("desktop");
-    expect(resolveDevice("mobile", "desktop")).toBe("mobile");
   });
 });

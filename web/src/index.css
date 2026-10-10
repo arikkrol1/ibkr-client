@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* Phone layout: <html data-device="mobile"> is set from the user agent (or the
-   footer's Layout switch) by hooks/useDevice.ts. Use as `mobile:hidden` etc. */
+/* Phone layout: <html data-device="mobile"> is set from the user agent by
+   hooks/useDevice.ts. Use as `mobile:hidden` etc. */
 @custom-variant mobile (&:where([data-device="mobile"], [data-device="mobile"] *));
 
 :root {
