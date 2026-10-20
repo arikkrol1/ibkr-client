@@ -389,6 +389,10 @@ Overlay multiple symbols on one chart over a shared timeframe.
   (broad-market/sector ETFs, megacap tech, large caps, commodities/crypto/bonds)
   over the selected window.
 - **Legend:** click a chip to hide/show a series, `×` to remove it.
+- **Clear:** the button next to the search box resets the chart to SPY only.
+- **Saved selection:** the chosen symbols are kept in the browser's
+  `localStorage`, so they survive switching tabs and reloading (per browser;
+  clearing site data resets to SPY).
 
 ### Charts (`/chart`)
 

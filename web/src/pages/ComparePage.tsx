@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { api, type HistoryResponse, type SymbolMatch } from "../api";
 import { CompareChart, type CompareMode } from "../components/CompareChart";
@@ -7,6 +7,12 @@ import { SymbolTip } from "../components/SymbolTip";
 import { fmtPct, pnlColor } from "../utils/format";
 import { PALETTE, OVERFLOW_COLOR } from "../utils/palette";
 import { windowPct } from "../utils/returns";
+import {
+  DEFAULT_COMPARE_ENTRIES,
+  loadCompareEntries,
+  saveCompareEntries,
+  type CompareEntry,
+} from "../utils/compareSelection";
 import { COMPARE_TIMEFRAMES as TIMEFRAMES, TF_MONTH } from "../utils/timeframes";
 
 
@@ -30,17 +36,6 @@ const MODES: { key: CompareMode; label: string }[] = [
   { key: "price", label: "Price" },
 ];
 
-interface CompareEntry {
-  key: string;
-  symbol: string;
-  conId?: number;
-  name?: string;
-  /** Palette slot assigned when the symbol is added; stable across removals. */
-  slot: number;
-}
-
-const DEFAULT_ENTRIES: CompareEntry[] = [{ key: "SPY", symbol: "SPY", slot: 0 }];
-
 /**
  * Overlay chart comparing multiple symbols over a shared timeframe. Fetches
  * one year of daily bars per symbol and slices client-side, so switching
@@ -48,7 +43,10 @@ const DEFAULT_ENTRIES: CompareEntry[] = [{ key: "SPY", symbol: "SPY", slot: 0 }]
  * window start) with a toggle to raw prices.
  */
 export function ComparePage() {
-  const [entries, setEntries] = useState<CompareEntry[]>(DEFAULT_ENTRIES);
+  // The selected symbols persist in localStorage, so they survive tab
+  // switches and reloads until the user clears them.
+  const [entries, setEntries] = useState<CompareEntry[]>(() => loadCompareEntries());
+  useEffect(() => saveCompareEntries(entries), [entries]);
   const [tfKey, setTfKey] = useState("month");
   const [mode, setMode] = useState<CompareMode>("pct");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -125,6 +123,11 @@ export function ComparePage() {
 
   const removeAll = () => {
     setEntries([]);
+    setHidden(new Set());
+  };
+
+  const clear = () => {
+    setEntries(DEFAULT_COMPARE_ENTRIES);
     setHidden(new Set());
   };
 
@@ -220,7 +223,18 @@ export function ComparePage() {
         </div>
       </div>
 
-      <SymbolSearch onSelect={addSymbol} />
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 w-full max-w-md">
+          <SymbolSearch onSelect={addSymbol} />
+        </div>
+        <button
+          onClick={clear}
+          title="Reset the chart to SPY only"
+          className="shrink-0 rounded-lg border border-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-gray-500 hover:text-white"
+        >
+          Clear
+        </button>
+      </div>
 
       {holdings.length > 0 && (
         <div className="flex cursor-default select-none flex-wrap items-center gap-1.5">
