@@ -39,6 +39,13 @@ const SECTORS: Instrument[] = [
   { symbol: "XLC", name: "Communication Services" },
   { symbol: "XLE", name: "Energy" },
   { symbol: "XLF", name: "Financials" },
+  { symbol: "XLV", name: "Health Care" },
+  { symbol: "XLY", name: "Consumer Discretionary" },
+  { symbol: "XLI", name: "Industrials" },
+  { symbol: "XLP", name: "Consumer Staples" },
+  { symbol: "XLU", name: "Utilities" },
+  { symbol: "XLRE", name: "Real Estate" },
+  { symbol: "XLB", name: "Materials" },
   { symbol: "XBI", name: "Biotech" },
   { symbol: "IBB", name: "Biotechnology" },
 ];

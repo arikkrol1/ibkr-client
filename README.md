@@ -420,7 +420,9 @@ A grid of ETF-proxy mini-charts for a quick market read.
 - **Indexes:** SPY, QQQ, DIA, IWM.
 - **Sectors:** semiconductors, aerospace & defense, space, quantum, technology
   (XLK, IYW), software (IGV), software security (CIBR), communication services
-  (XLC), energy, financials, biotech (XBI, IBB).
+  (XLC), energy (XLE), financials (XLF), health care (XLV), consumer
+  discretionary (XLY), industrials (XLI), consumer staples (XLP), utilities
+  (XLU), real estate (XLRE), materials (XLB), biotech (XBI, IBB).
 - Each card shows last price and % change over the selected range
   (**1D → 1Y**), tinted green/red by direction.
 
