@@ -424,7 +424,8 @@ A grid of ETF-proxy mini-charts for a quick market read.
   discretionary (XLY), industrials (XLI), consumer staples (XLP), utilities
   (XLU), real estate (XLRE), materials (XLB), biotech (XBI, IBB).
 - Each card shows last price and % change over the selected range
-  (**1D → 1Y**), tinted green/red by direction.
+  (**1D → 10Y**, the same presets as Charts; 5Y/10Y use weekly bars), tinted
+  green/red by direction.
 
 ---
 

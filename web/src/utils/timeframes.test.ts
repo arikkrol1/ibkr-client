@@ -31,6 +31,12 @@ describe("timeframe lists", () => {
     expect(byLabel["6M"]).toEqual({ label: "6M", barSize: "1 day", duration: "6 M" });
   });
 
+  it("chart presets offer 5Y and 10Y on weekly bars", () => {
+    const byLabel = Object.fromEntries(CHART_PRESETS.map((p) => [p.label, p]));
+    expect(byLabel["5Y"]).toEqual({ label: "5Y", barSize: "1 week", duration: "5 Y" });
+    expect(byLabel["10Y"]).toEqual({ label: "10Y", barSize: "1 week", duration: "10 Y" });
+  });
+
   it("chart default stays on 6M", () => {
     expect(CHART_PRESETS[DEFAULT_CHART_PRESET_IDX].label).toBe("6M");
   });

@@ -3,15 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { MiniAreaChart } from "../components/MiniAreaChart";
 import { fmtMoney, fmtPct, pnlColor } from "../utils/format";
-
-const RANGES = [
-  { label: "1D", barSize: "5 mins", duration: "1 D" },
-  { label: "1W", barSize: "30 mins", duration: "1 W" },
-  { label: "1M", barSize: "1 day", duration: "1 M" },
-  { label: "3M", barSize: "1 day", duration: "3 M" },
-  { label: "6M", barSize: "1 day", duration: "6 M" },
-  { label: "1Y", barSize: "1 day", duration: "1 Y" },
-] as const;
+import { CHART_PRESETS as RANGES, DEFAULT_CHART_PRESET_IDX } from "../utils/timeframes";
 
 type Range = (typeof RANGES)[number];
 
@@ -51,14 +43,14 @@ const SECTORS: Instrument[] = [
 ];
 
 export function SectorsPage() {
-  const [rangeIdx, setRangeIdx] = useState(4); // 6M
+  const [rangeIdx, setRangeIdx] = useState(DEFAULT_CHART_PRESET_IDX);
   const range = RANGES[rangeIdx];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-gray-500">
-          ETF proxies, daily closes over the selected range.
+          ETF proxies, closes over the selected range.
         </p>
         <div className="flex flex-wrap gap-1">
           {RANGES.map((r, i) => (
