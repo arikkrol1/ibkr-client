@@ -475,13 +475,16 @@ async function flexHistory(days: number): Promise<PnlHistory> {
 
   return {
     series: sortSeries(series),
-    accountDays: accountDays.map((d) => ({
-      time: d.date,
-      nav: d.nav,
-      cash: d.cash,
-      stock: d.stock,
-      twr: d.twr,
-    })),
+    accountDays: fillDailyTwr(
+      accountDays.map((d) => ({
+        time: d.date,
+        nav: d.nav,
+        cash: d.cash,
+        stock: d.stock,
+        twr: d.twr,
+      })),
+      cash.filter((c) => c.kind === "flow"),
+    ),
     // Deposits and withdrawals move money without earning it — they belong to
     // the denominator, not the numerator, so only income crosses the API.
     income: cash
@@ -490,6 +493,30 @@ async function flexHistory(days: number): Promise<PnlHistory> {
     errors,
     tradesAsOf: await tradesAsOf(),
   };
+}
+
+/**
+ * Fill days IBKR reported no daily TWR for — the recurring 365-day Flex query
+ * only carries a period-long Change in NAV — from consecutive NAVs, netting out
+ * deposits and withdrawals that landed in between:
+ * (nav − prevNav − flows) / prevNav. On days that have both this tracks IBKR's
+ * own figure to a few hundredths of a percent; without the fill, chaining the
+ * year silently stops at the last day IBKR did report.
+ */
+export function fillDailyTwr(
+  days: AccountDay[],
+  flows: { time: number; amount: number }[],
+): AccountDay[] {
+  let prev: AccountDay | undefined;
+  return days.map((d) => {
+    const prior = prev;
+    if (d.nav != null) prev = d;
+    if (d.twr != null || d.nav == null || prior?.nav == null || prior.nav <= 0) return d;
+    const flow = flows
+      .filter((f) => f.time > prior.time && f.time <= d.time)
+      .reduce((sum, f) => sum + f.amount, 0);
+    return { ...d, twr: ((d.nav - prior.nav - flow) / prior.nav) * 100 };
+  });
 }
 
 function sortSeries(series: PnlSeries[]): PnlSeries[] {

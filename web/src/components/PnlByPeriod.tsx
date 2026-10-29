@@ -121,8 +121,9 @@ export function PnlByPeriod() {
             {periods.navBased.size > 0
               ? "Total % is this year\u2019s P&L over net liquidation value at the prior year-end."
               : "Total % is measured against position value at the prior year-end, which ignores cash \u2014 import NAV history for every year to measure against net liquidation value instead."}{" "}
-            TWR is IBKR&rsquo;s own time-weighted return, which neutralises deposits and
-            withdrawals; the two columns differ by design in a year with funding, and
+            TWR is IBKR&rsquo;s own time-weighted return (days IBKR didn&rsquo;t report are
+            derived from net liquidation value net of deposits), which neutralises deposits
+            and withdrawals; the two columns differ by design in a year with funding, and
             converge in one without.
           </p>
         </div>

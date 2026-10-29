@@ -21,6 +21,7 @@ import { getPortfolio, type PortfolioPosition } from "./portfolio.js";
 import { getHistory, type HistoryBar } from "./marketData.js";
 import { getFxRates } from "./fx.js";
 import {
+  fillDailyTwr,
   flatSeries,
   getPnlHistory,
   invalidatePnlCache,
@@ -393,5 +394,61 @@ describe("getPnlHistory", () => {
     invalidatePnlCache();
     await getPnlHistory(DAYS);
     expect(vi.mocked(flex.getFlexTrades)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fillDailyTwr", () => {
+  const D = 86_400;
+
+  it("keeps IBKR's own daily TWR where it exists", () => {
+    const days = [
+      { time: 0, nav: 1000, twr: 0 },
+      { time: D, nav: 1100, twr: 9.5 },
+    ];
+    expect(fillDailyTwr(days, [])).toEqual(days);
+  });
+
+  it("derives missing days from consecutive NAVs", () => {
+    const out = fillDailyTwr(
+      [
+        { time: 0, nav: 1000, twr: 0 },
+        { time: D, nav: 1010 },
+        { time: 2 * D, nav: 999.9 },
+      ],
+      [],
+    );
+    expect(out[1].twr).toBeCloseTo(1);
+    expect(out[2].twr).toBeCloseTo(-1);
+  });
+
+  it("nets out deposits and withdrawals landing since the previous NAV", () => {
+    const out = fillDailyTwr(
+      [
+        { time: 0, nav: 1000 },
+        { time: 3 * D, nav: 2020 },
+        { time: 4 * D, nav: 1520 },
+      ],
+      [
+        { time: D, amount: 600 },
+        { time: 3 * D, amount: 400 },
+        { time: 4 * D, amount: -500 },
+      ],
+    );
+    expect(out[0].twr).toBeUndefined();
+    expect(out[1].twr).toBeCloseTo(2);
+    expect(out[2].twr).toBeCloseTo(0);
+  });
+
+  it("skips days without NAV and measures from the last one that had it", () => {
+    const out = fillDailyTwr(
+      [
+        { time: 0, nav: 1000 },
+        { time: D },
+        { time: 2 * D, nav: 1050 },
+      ],
+      [],
+    );
+    expect(out[1].twr).toBeUndefined();
+    expect(out[2].twr).toBeCloseTo(5);
   });
 });

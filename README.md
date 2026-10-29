@@ -346,7 +346,11 @@ Realized **and** unrealized P&L over time, built from your full trade history
 > - **TWR** — IBKR's own time-weighted return, chained from the daily `twr` in
 >   a **Change in NAV** section with *Breakout by Day* enabled. Neutralises
 >   deposits and withdrawals, so this is the column that matches TWS's "Total
->   return this year". Blank for any year the statements don't fully cover.
+>   return this year". Days IBKR didn't report a daily `twr` for — the
+  recurring 365-day query only carries a period-long Change in NAV — are
+  filled from consecutive NAVs net of deposits and withdrawals, which tracks
+  IBKR's figure to a few hundredths of a percent. Blank for any year the
+  statements don't fully cover.
 >
 > The two differ by design in a year with funding, and converge in one without.
 >
